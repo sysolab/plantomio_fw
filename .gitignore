@@ -33,14 +33,17 @@ var/
 logs/
 *.log
 
-# Firmware files
-firmware/*.bin
-
-# Android app files
+# Binary files
+*.bin
 *.apk
+
+# Release files and folders
 android_app/
 Android_app/
+firmware/
+App/
 releases/
+release_packages/
 
 # Temporary files
 tmp/

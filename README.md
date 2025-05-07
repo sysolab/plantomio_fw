@@ -1,40 +1,81 @@
-# WaterBee Firmware Flasher
+# WaterBee Firmware and Application
 
-A comprehensive tool for flashing and managing ESP32-based WaterBee firmware. This utility provides a streamlined process for flashing different versions of WaterBee firmware to ESP32C6 devices, with support for both debug and release builds.
+A comprehensive toolset for the WaterBee ESP32C6-based irrigation and plant monitoring system. This repository provides tools to flash firmware to WaterBee devices, download Android applications, and manage releases.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Getting Started](#getting-started)
+  - [Cloning the Repository](#cloning-the-repository)
+  - [Setting Up](#setting-up)
+- [Firmware Installation](#firmware-installation)
+  - [Downloading Firmware](#downloading-firmware)
+  - [Flashing Instructions](#flashing-instructions)
+  - [Monitoring](#monitoring)
+- [Android Application](#android-application)
+  - [Downloading the APK](#downloading-the-apk)
+  - [Installation](#installation)
+- [For Contributors](#for-contributors)
+  - [Auto-Release Script](#auto-release-script)
+  - [Creating New Releases](#creating-new-releases)
+- [Troubleshooting](#troubleshooting)
+- [Technical Details](#technical-details)
+- [License](#license)
+- [Version History](#version-history)
 
 ## Overview
 
-This project provides tools to:
-- Set up a Python virtual environment with all required dependencies
-- Flash WaterBee firmware to ESP32C6 devices
-- Interactively select firmware versions and serial ports
-- Automatically detect connected devices
-- Monitor device serial output after flashing
+The WaterBee system consists of two main components:
 
-## Prerequisites
+1. **ESP32C6 Firmware** - Runs on the WaterBee hardware device, controlling sensors and irrigation systems
+2. **Android Application** - Allows users to control and monitor their WaterBee devices
 
-- **Python 3.8+** – already on macOS / most Linux.  
-  Windows: install from https://python.org and *tick* "Add to PATH".
-- A USB-C / USB-TTL cable connected to your WaterBee device
-- (Optional) ESP-IDF installed for additional functionality
+This repository provides the tools to install and manage both components.
 
 ## Getting Started
 
-### 1. Setup
+### Cloning the Repository
+
+Clone this repository to your local machine:
+
+```bash
+git clone https://github.com/sysolab/plantomio_fw.git
+cd plantomio_fw
+```
+
+### Setting Up
 
 Run the setup script to create a virtual environment and install all dependencies:
 
 ```bash
-# This will create a hidden virtual environment (.waterBeeFW)
-# and install all required packages
 source ./setup.sh
 ```
 
 > **Note**: Using `source` is important as it activates the environment in your current shell.
 
-### 2. Flashing Firmware
+## Firmware Installation
 
-The interactive mode is the recommended approach for most users:
+### Downloading Firmware
+
+Firmware files are available as GitHub releases and not directly in the repository. You can download them by:
+
+1. **Visiting the GitHub Releases Page**:
+   - Go to [https://github.com/sysolab/plantomio_fw/releases](https://github.com/sysolab/plantomio_fw/releases)
+   - Look for the latest firmware release (tagged with `firmware-v*`)
+   - Download the appropriate firmware zip file:
+     - `firmware_v*_debug.zip` - For development and testing
+     - `firmware_v*_release.zip` - For production use
+
+2. After downloading, extract the files to the `firmware` directory:
+   ```bash
+   mkdir -p firmware/debug firmware/release
+   unzip firmware_v*_debug.zip -d firmware/
+   unzip firmware_v*_release.zip -d firmware/
+   ```
+
+### Flashing Instructions
+
+The flashing script provides an interactive way to flash your WaterBee device:
 
 ```bash
 ./flash_waterbee.sh
@@ -56,10 +97,10 @@ This will:
 ./flash_waterbee.sh debug
 
 # Flash a specific firmware and specify the port
-./flash_waterbee.sh firmware/release/waterBee_release_1.0.60 /dev/ttyUSB0
+./flash_waterbee.sh firmware/release/waterBee_1.0.103_release_merged /dev/ttyUSB0
 ```
 
-### 3. Monitoring
+### Monitoring
 
 After flashing, you can monitor the device's serial output:
 
@@ -67,43 +108,86 @@ After flashing, you can monitor the device's serial output:
 python -m esptool --chip esp32c6 -p <PORT> monitor
 ```
 
-Replace `<PORT>` with your device's port (same as used for flashing).
+Replace `<PORT>` with your device's port (the same one used for flashing).
 
-## Project Structure
+## Android Application
 
+### Downloading the APK
+
+Android APK files are available as GitHub releases. You can download them by:
+
+1. **Visiting the GitHub Releases Page**:
+   - Go to [https://github.com/sysolab/plantomio_fw/releases](https://github.com/sysolab/plantomio_fw/releases)
+   - Look for the latest Android release (tagged with `android-v*`)
+   - Download the appropriate APK file:
+     - `waterBee_universal-release_v*.apk` - Works on all Android devices
+     - `waterBee_arm64-v8a-release_v*.apk` - For ARM64 devices
+     - `waterBee_armeabi-v7a-release_v*.apk` - For ARMv7 devices
+     - `waterBee_debug_v*.apk` - Debug version with additional logging
+
+2. **Using the Automated Download Script**:
+   ```bash
+   # Make the script executable
+   chmod +x android_app_install.sh
+   
+   # Run the script
+   ./android_app_install.sh
+   ```
+   This will create an `android_app` directory with all APK variants.
+
+### Installation
+
+1. Transfer the APK file to your Android device
+2. On your Android device, navigate to the APK file and tap to install
+3. You may need to enable "Install from Unknown Sources" in your Android settings
+
+## For Contributors
+
+### Auto-Release Script
+
+The `auto_release.sh` script automates the process of creating and publishing releases:
+
+```bash
+# Install dependencies (one-time setup)
+brew install jq
+brew install gh  # Optional but recommended
+
+# If using GitHub CLI
+gh auth login
+
+# If using API method instead
+export GITHUB_TOKEN=your_personal_access_token
+
+# Run the script
+./auto_release.sh
 ```
-plantomio_fw/
-├── firmware/                  # Firmware files
-│   ├── debug/                 # Debug builds
-│   │   └── waterBee_debug_*/  # Debug firmware versions
-│   ├── release/               # Release builds
-│   │   └── waterBee_release_*/# Release firmware versions
-│   └── README_FLASH.txt       # Original flashing instructions
-├── .waterBeeFW/               # Python virtual environment (hidden)
-├── requirements.txt           # Python dependencies
-├── setup.sh                   # Setup script
-└── flash_waterbee.sh          # Firmware flashing script
-```
 
-## Firmware Structure
+The script will:
+- Detect version numbers from firmware and APK files
+- Create appropriate tags
+- Generate release notes
+- Upload files to GitHub releases
 
-Each firmware folder contains:
-- `*.bin` - The merged firmware binary file
-- `flash_args` - Flash arguments file used by esptool
+### Creating New Releases
 
-## Cross-Platform Compatibility
+1. Place new firmware files in:
+   - `firmware/debug/waterBee_VERSION_debug_merged/`
+   - `firmware/release/waterBee_VERSION_release_merged/`
 
-This utility works on:
-- macOS
-- Linux (Ubuntu and other distributions)
-- Windows (with appropriate serial port specifications)
+2. Place new APK files in:
+   - `android_app/`
+
+3. Run the auto-release script:
+   ```bash
+   ./auto_release.sh
+   ```
 
 ## Troubleshooting
 
 ### No Serial Ports Detected
 
 - Ensure your device is connected properly
-- Check USB cable is functional
+- Check that the USB cable is functional
 - Try a different USB port
 - Install appropriate USB-serial drivers if needed
 
@@ -136,25 +220,4 @@ See LICENSE file for details.
 
 ## Version History
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
-
-## Android App
-
-The Android APK files are available as GitHub releases. To download and install them, you can:
-
-1. Visit the [releases page](https://github.com/sysolab/plantomio_fw/releases) and download the appropriate APK file
-2. Or use the provided script to download them automatically:
-
-```bash
-# Make the script executable
-chmod +x android_app_install.sh
-
-# Run the script
-./android_app_install.sh
-```
-
-Available APK variants:
-- waterBee_universal-release_v1.6.0.apk - Works on all Android devices
-- waterBee_arm64-v8a-release_v1.6.0.apk - For ARM64 devices
-- waterBee_armeabi-v7a-release_v1.6.0.apk - For ARMv7 devices
-- waterBee_debug_v1.6.0.apk - Debug version with additional logging 
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes. 
