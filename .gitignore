@@ -2,35 +2,59 @@
 .venv/
 venv/
 ENV/
+.waterBeeFW/
+waterBeeFW/
+env/
+.Python
 
 # Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 
 # Distribution / packaging
 dist/
 build/
 *.egg-info/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+.installed.cfg
+*.egg
 
 # Logs
 logs/
 *.log
 
-# Firmware files (users should add their own)
+# Firmware files
 firmware/*.bin
+
+# Android app files
+*.apk
+Android_app/*.apk
 
 # Temporary files
 tmp/
 *.tmp
 tmp_*
+data/
 
 # Mac OS specific files
 .DS_Store
+.DS_Store?
 .AppleDouble
 .LSOverride
 Icon?
 ._*
+.Spotlight-V100
+.Trashes
 
 # Windows specific files
 Thumbs.db
@@ -48,6 +72,10 @@ esp-build/
 
 # Serial monitor logs
 monitor_logs/
+
+# Docker
+.env
+.dockerignore
 
 # Environment configuration
 .env 
