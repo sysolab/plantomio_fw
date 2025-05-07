@@ -2,6 +2,13 @@
 # --------------------------------------------------------------------
 # Universal flasher for any WaterBee build (release or debug)
 # --------------------------------------------------------------------
+# CHANGELOG:
+# 2024-05-07: 
+# - Fixed firmware extraction to correct folders
+# - Updated to handle merged binary files properly
+# - Added option to erase flash before flashing
+# - Fixed monitoring command to use miniterm instead of esptool
+# --------------------------------------------------------------------
 set -euo pipefail
 
 ##############################################################################
@@ -452,24 +459,28 @@ if [ -z "$BIN_FILE" ]; then
   exit 1
 fi
 
-# Check if flash_args file exists
-FLASH_ARGS="$FIRMWARE_PATH/flash_args"
-if [ ! -f "$FLASH_ARGS" ]; then
-  echo -e "${RED}flash_args not found in $FIRMWARE_PATH${NC}"
-  exit 1
-fi
+echo -e "${GREEN}Found merged bin file: $BIN_FILE${NC}"
+
+# Ask if user wants to erase flash before flashing
+echo -e "${YELLOW}Do you want to erase the flash completely before flashing? (y/n)${NC}"
+read -r erase_flash
 
 # Build the esptool command
 echo -e "${BLUE}Building flash command...${NC}"
+
+# Initialize flash command with basic parameters
 FLASH_CMD="python -m esptool --chip $TARGET --port $PORT --baud $BAUD --before default_reset --after hard_reset"
 
-# Add flash arguments from the file
-while IFS= read -r line || [[ -n "$line" ]]; do
-  # Skip comments and empty lines
-  if [[ ! "$line" =~ ^# ]] && [[ -n "$line" ]]; then
-    FLASH_CMD="$FLASH_CMD $line"
-  fi
-done < "$FLASH_ARGS"
+# Erase flash if requested
+if [[ "$erase_flash" =~ ^[Yy]$ ]]; then
+  echo -e "${YELLOW}Erasing flash...${NC}"
+  eval "$FLASH_CMD erase_flash"
+  echo -e "${GREEN}Flash erased.${NC}"
+fi
+
+# Since we have a merged bin file, we can flash it directly to address 0x0
+echo -e "${GREEN}Flashing merged bin file to address 0x0${NC}"
+FLASH_CMD="$FLASH_CMD write_flash 0x0 \"$BIN_FILE\""
 
 # Show the command that will be executed
 echo -e "${YELLOW}About to execute:${NC}"
@@ -482,7 +493,15 @@ echo -e "${GREEN}Flashing...${NC}"
 eval "$FLASH_CMD"
 
 echo -e "${GREEN}Firmware flashed successfully!${NC}"
-echo -e "${BLUE}To monitor the device, run:${NC}"
-echo -e "${YELLOW}python -m esptool --chip $TARGET --port $PORT monitor${NC}"
+echo -e "${BLUE}Do you want to monitor the device? (y/n)${NC}"
+read -r monitor_device
+
+if [[ "$monitor_device" =~ ^[Yy]$ ]]; then
+  echo -e "${YELLOW}Starting monitor...${NC}"
+  python -m serial.tools.miniterm --raw $PORT $BAUD
+else
+  echo -e "${BLUE}To monitor the device later, run:${NC}"
+  echo -e "${YELLOW}python -m serial.tools.miniterm --raw $PORT $BAUD${NC}"
+fi
 
 exit 0 
