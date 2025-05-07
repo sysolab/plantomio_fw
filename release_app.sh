@@ -52,16 +52,10 @@ check_dependencies() {
     echo -e "  - Ubuntu/Debian: sudo apt install jq"
     exit 1
   fi
-  
-  # Check for zip
-  if ! command -v zip &> /dev/null; then
-    echo -e "${RED}Error: zip is required but not installed.${NC}"
-    exit 1
-  fi
 }
 
-# Function to find APK files and extract the version
-find_apk_files_and_version() {
+# Function to find APK files and extract the latest version
+find_latest_apk_version() {
   echo -e "${BLUE}Looking for APK files in $ANDROID_APP_DIR...${NC}"
   
   if [ ! -d "$ANDROID_APP_DIR" ]; then
@@ -69,7 +63,7 @@ find_apk_files_and_version() {
     exit 1
   fi
   
-  # Find APK files
+  # Find all APK files
   APK_FILES=()
   while IFS= read -r -d '' file; do
     APK_FILES+=("$file")
@@ -83,33 +77,27 @@ find_apk_files_and_version() {
   
   echo -e "${GREEN}Found ${#APK_FILES[@]} APK files${NC}"
   
-  # Detect version from APK filename
-  # Common naming patterns:
-  # - app-v1.0.0-debug.apk
-  # - waterbee_1.0.0_arm64-v8a.apk
-  # - waterbee-1.0.0-armeabi-v7a.apk
+  # Extract all versions from APK filenames and store in an array
+  ALL_VERSIONS=()
   
-  VERSION_PATTERN_FOUND=false
   for apk in "${APK_FILES[@]}"; do
     filename=$(basename "$apk")
     
     # Try various version patterns
     if [[ $filename =~ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-      APP_VERSION="${BASH_REMATCH[1]}"
-      VERSION_PATTERN_FOUND=true
-      break
+      version="${BASH_REMATCH[1]}"
+      ALL_VERSIONS+=("$version")
     elif [[ $filename =~ _([0-9]+\.[0-9]+\.[0-9]+)_ ]]; then
-      APP_VERSION="${BASH_REMATCH[1]}"
-      VERSION_PATTERN_FOUND=true
-      break
+      version="${BASH_REMATCH[1]}"
+      ALL_VERSIONS+=("$version")
     elif [[ $filename =~ -([0-9]+\.[0-9]+\.[0-9]+)- ]]; then
-      APP_VERSION="${BASH_REMATCH[1]}"
-      VERSION_PATTERN_FOUND=true
-      break
+      version="${BASH_REMATCH[1]}"
+      ALL_VERSIONS+=("$version")
     fi
   done
   
-  if [ "$VERSION_PATTERN_FOUND" = false ]; then
+  # If no versions were found, ask for manual input
+  if [ ${#ALL_VERSIONS[@]} -eq 0 ]; then
     echo -e "${YELLOW}Could not automatically determine app version from filenames.${NC}"
     echo -e "${YELLOW}Please enter the app version manually (e.g., 1.0.0):${NC}"
     read -r APP_VERSION
@@ -119,7 +107,14 @@ find_apk_files_and_version() {
       exit 1
     fi
   else
-    echo -e "${GREEN}Detected app version: $APP_VERSION${NC}"
+    # Sort versions and get the latest
+    IFS=$'\n' SORTED_VERSIONS=($(sort -V <<<"${ALL_VERSIONS[*]}"))
+    unset IFS
+    
+    # Get the latest version
+    APP_VERSION="${SORTED_VERSIONS[${#SORTED_VERSIONS[@]}-1]}"
+    
+    echo -e "${GREEN}Detected latest version: $APP_VERSION${NC}"
     
     # Ask for confirmation
     echo -e "${YELLOW}Is this the correct version? (y/n)${NC}"
@@ -137,6 +132,25 @@ find_apk_files_and_version() {
   # Set release tag
   RELEASE_TAG="android-v${APP_VERSION}"
   echo -e "${GREEN}Using release tag: $RELEASE_TAG${NC}"
+  
+  # Only select APK files with the latest version
+  LATEST_APK_FILES=()
+  
+  for apk in "${APK_FILES[@]}"; do
+    filename=$(basename "$apk")
+    
+    if [[ $filename =~ v$APP_VERSION || $filename =~ _$APP_VERSION_ || $filename =~ -$APP_VERSION- ]]; then
+      LATEST_APK_FILES+=("$apk")
+    fi
+  done
+  
+  echo -e "${GREEN}Found ${#LATEST_APK_FILES[@]} APK files for version $APP_VERSION${NC}"
+  
+  # Check if APK files for the latest version were found
+  if [ ${#LATEST_APK_FILES[@]} -eq 0 ]; then
+    echo -e "${RED}Error: No APK files found for version $APP_VERSION${NC}"
+    exit 1
+  fi
 }
 
 # Function to prepare release artifacts
@@ -200,18 +214,9 @@ prepare_release_artifacts() {
   echo "" >> "$RELEASE_NOTES"
   echo "## APK Files" >> "$RELEASE_NOTES"
   
-  # Create an all-in-one zip file containing all APKs
-  ALL_APK_ZIP="$TEMP_DIR/waterbee-android-v${APP_VERSION}-all.zip"
-  echo -e "${BLUE}Creating all-in-one APK archive...${NC}"
-  
-  (cd "$ANDROID_APP_DIR" && zip -j "$ALL_APK_ZIP" *.apk)
-  
-  echo -e "${GREEN}All-in-one APK archive created: $(basename "$ALL_APK_ZIP")${NC}"
-  echo "- **All APKs Bundle**: $(basename "$ALL_APK_ZIP") - Contains all APK variants in a single ZIP file" >> "$RELEASE_NOTES"
-  
   # Copy individual APK files to temp dir and add them to release notes
-  echo -e "${BLUE}Preparing individual APK files...${NC}"
-  for apk in "${APK_FILES[@]}"; do
+  echo -e "${BLUE}Preparing APK files for version $APP_VERSION...${NC}"
+  for apk in "${LATEST_APK_FILES[@]}"; do
     filename=$(basename "$apk")
     cp "$apk" "$TEMP_DIR/$filename"
     
@@ -265,7 +270,7 @@ create_github_release() {
       --title "WaterBee Android App v${APP_VERSION}" \
       --notes-file "$RELEASE_NOTES"
     
-    # Upload all APK files
+    # Upload all APK files for the latest version
     for apk in "$TEMP_DIR"/*.apk; do
       if [ -f "$apk" ]; then
         filename=$(basename "$apk")
@@ -273,10 +278,6 @@ create_github_release() {
         gh release upload "$RELEASE_TAG" "$apk" --repo "$GITHUB_REPO"
       fi
     done
-    
-    # Upload ZIP bundle
-    echo -e "${BLUE}Uploading all-in-one APK archive...${NC}"
-    gh release upload "$RELEASE_TAG" "$ALL_APK_ZIP" --repo "$GITHUB_REPO"
   else
     # Create release using GitHub API
     echo -e "${BLUE}Creating release $RELEASE_TAG using GitHub API...${NC}"
@@ -305,7 +306,7 @@ create_github_release() {
       exit 1
     fi
     
-    # Upload all APK files
+    # Upload APK files for the latest version
     for apk in "$TEMP_DIR"/*.apk; do
       if [ -f "$apk" ]; then
         filename=$(basename "$apk")
@@ -317,14 +318,6 @@ create_github_release() {
           "${upload_url}?name=$filename"
       fi
     done
-    
-    # Upload ZIP bundle
-    echo -e "${BLUE}Uploading all-in-one APK archive...${NC}"
-    curl -s -X POST \
-      -H "Authorization: token $GITHUB_TOKEN" \
-      -H "Content-Type: application/zip" \
-      --data-binary @"$ALL_APK_ZIP" \
-      "${upload_url}?name=$(basename "$ALL_APK_ZIP")"
   fi
   
   echo -e "${GREEN}GitHub release created successfully!${NC}"
@@ -345,7 +338,7 @@ main() {
   echo -e "====================================="
   
   check_dependencies
-  find_apk_files_and_version
+  find_latest_apk_version
   
   echo -e "${YELLOW}Ready to release Android app v${APP_VERSION} to GitHub.${NC}"
   echo -e "${YELLOW}Continue? (y/n)${NC}"
