@@ -136,4 +136,25 @@ See LICENSE file for details.
 
 ## Version History
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and release notes. 
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+
+## Android App
+
+The Android APK files are available as GitHub releases. To download and install them, you can:
+
+1. Visit the [releases page](https://github.com/sysolab/plantomio_fw/releases) and download the appropriate APK file
+2. Or use the provided script to download them automatically:
+
+```bash
+# Make the script executable
+chmod +x android_app_install.sh
+
+# Run the script
+./android_app_install.sh
+```
+
+Available APK variants:
+- waterBee_universal-release_v1.6.0.apk - Works on all Android devices
+- waterBee_arm64-v8a-release_v1.6.0.apk - For ARM64 devices
+- waterBee_armeabi-v7a-release_v1.6.0.apk - For ARMv7 devices
+- waterBee_debug_v1.6.0.apk - Debug version with additional logging 
