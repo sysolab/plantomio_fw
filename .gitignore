@@ -1,0 +1,53 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+
+# Firmware files (users should add their own)
+firmware/*.bin
+
+# Temporary files
+tmp/
+*.tmp
+tmp_*
+
+# Mac OS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Windows specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ESP-IDF build files
+esp-build/
+
+# Serial monitor logs
+monitor_logs/
+
+# Environment configuration
+.env 
