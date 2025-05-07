@@ -1,5 +1,23 @@
 # WaterBee Firmware Flasher Changelog
 
+## v1.2.0 - 08.May.2024
+
+### Features
+- Added dedicated release scripts for firmware and Android app:
+  - `release_fw.sh` - For releasing firmware with proper version tags
+  - `release_app.sh` - For releasing Android app with proper version tags
+- Improved repository structure with better separation of local and remote files
+- Enhanced project organization with clean repository history
+
+### Technical Improvements
+- Created robust firmware release system with version detection from filenames
+- Implemented Android app release system with APK packaging and metadata
+- Added support for both GitHub CLI and API methods for releases
+- Improved dependency checking and error handling in release scripts
+- Enhanced release notes generation with automatic version detection
+- ZIP packaging for combined firmware and app releases
+- Better local file management for firmware and Android app folders
+
 ## v1.1.0 - 07.May.2025
 
 ### Features
