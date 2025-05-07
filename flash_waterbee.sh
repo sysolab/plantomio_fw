@@ -220,12 +220,20 @@ find_firmware_versions() {
     done
     
     # Sort versions (compatible with bash 3.x on macOS)
-    local sorted_versions=()
-    local IFS=$'\n'
-    sorted_versions=($(echo "${versions[*]}" | sort -V))
-    unset IFS
-    
-    echo "${sorted_versions[@]}"
+    # Check if any versions were found first to avoid unbound variable error
+    if [ ${#versions[@]} -gt 0 ]; then
+      local IFS=$'\n'
+      local sorted_versions=($(echo "${versions[*]}" | sort -V))
+      unset IFS
+      
+      echo "${sorted_versions[@]}"
+    else
+      # Return empty if no versions found
+      echo ""
+    fi
+  else
+    # Return empty if directory doesn't exist
+    echo ""
   fi
 }
 
@@ -254,14 +262,24 @@ choose_firmware() {
   echo -e "${YELLOW}Looking for available $firmware_type firmware versions...${NC}"
   
   # Get available versions
-  local available_versions
-  available_versions=($(find_firmware_versions "$base_dir"))
+  local available_versions_output
+  available_versions_output=$(find_firmware_versions "$base_dir")
+  
+  # Convert output to array
+  local available_versions=()
+  if [ -n "$available_versions_output" ]; then
+    # Read the space-separated output into an array
+    read -r -a available_versions <<< "$available_versions_output"
+  fi
   
   if [ ${#available_versions[@]} -eq 0 ]; then
     echo -e "${RED}No $firmware_type firmware versions found in $base_dir${NC}"
     echo -e "${YELLOW}Attempting to download firmware from GitHub...${NC}"
     download_latest_firmware
-    available_versions=($(find_firmware_versions "$base_dir"))
+    
+    # Try to get versions again
+    available_versions_output=$(find_firmware_versions "$base_dir")
+    read -r -a available_versions <<< "$available_versions_output"
     
     if [ ${#available_versions[@]} -eq 0 ]; then
       echo -e "${RED}Unable to find or download any firmware.${NC}"
@@ -313,12 +331,21 @@ elif [ $# -ge 1 ]; then
   if [ "$1" == "debug" ]; then
     # Find latest debug version
     base_dir="firmware/debug"
-    available_versions=($(find_firmware_versions "$base_dir"))
+    available_versions_output=$(find_firmware_versions "$base_dir")
+    
+    # Convert output to array
+    local available_versions=()
+    if [ -n "$available_versions_output" ]; then
+      read -r -a available_versions <<< "$available_versions_output"
+    fi
     
     if [ ${#available_versions[@]} -eq 0 ]; then
       echo -e "${RED}No debug firmware found. Trying to download...${NC}"
       download_latest_firmware
-      available_versions=($(find_firmware_versions "$base_dir"))
+      
+      # Try to get versions again
+      available_versions_output=$(find_firmware_versions "$base_dir")
+      read -r -a available_versions <<< "$available_versions_output"
       
       if [ ${#available_versions[@]} -eq 0 ]; then
         echo -e "${RED}Unable to find or download any debug firmware.${NC}"
@@ -331,12 +358,21 @@ elif [ $# -ge 1 ]; then
   else # release
     # Find latest release version
     base_dir="firmware/release"
-    available_versions=($(find_firmware_versions "$base_dir"))
+    available_versions_output=$(find_firmware_versions "$base_dir")
+    
+    # Convert output to array
+    local available_versions=()
+    if [ -n "$available_versions_output" ]; then
+      read -r -a available_versions <<< "$available_versions_output"
+    fi
     
     if [ ${#available_versions[@]} -eq 0 ]; then
       echo -e "${RED}No release firmware found. Trying to download...${NC}"
       download_latest_firmware
-      available_versions=($(find_firmware_versions "$base_dir"))
+      
+      # Try to get versions again
+      available_versions_output=$(find_firmware_versions "$base_dir")
+      read -r -a available_versions <<< "$available_versions_output"
       
       if [ ${#available_versions[@]} -eq 0 ]; then
         echo -e "${RED}Unable to find or download any release firmware.${NC}"
