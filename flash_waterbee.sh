@@ -11,6 +11,7 @@ DEFAULT_PORT=${PORT:-/dev/tty.usbmodem2101}     # override:  PORT=/dev/ttyACMx .
 BAUD=${BAUD:-115200}
 TARGET=esp32c6
 VENV_PATH="./.venv"  # Path to the hidden virtual environment
+GITHUB_REPO="sysolab/plantomio_fw"  # GitHub repository
 ##############################################################################
 
 # Colors for terminal output
@@ -66,6 +67,83 @@ if [[ -z "${VIRTUAL_ENV:-}" || "$VIRTUAL_ENV" != *"$VENV_PATH"* ]]; then
   echo -e "${YELLOW}Activating virtual environment '$VENV_PATH'...${NC}"
   source "$VENV_PATH/bin/activate"
 fi
+
+##############################################################################
+# Function to download the latest firmware from GitHub releases
+##############################################################################
+download_latest_firmware() {
+  echo -e "${BLUE}Checking for latest firmware releases...${NC}"
+  
+  # Create firmware directories if they don't exist
+  mkdir -p firmware/debug firmware/release
+  
+  # Get list of releases with firmware tag
+  echo -e "${YELLOW}Fetching firmware releases from GitHub...${NC}"
+  local releases_json
+  releases_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases")
+  
+  # Check if GitHub API request failed
+  if [ $? -ne 0 ] || [[ "$releases_json" == *"API rate limit exceeded"* ]]; then
+    echo -e "${RED}Failed to fetch releases from GitHub API. Rate limit may be exceeded.${NC}"
+    echo -e "${YELLOW}Will use existing firmware if available.${NC}"
+    return 1
+  fi
+  
+  # Find latest firmware release (tag that starts with firmware-v)
+  local latest_firmware_tag
+  latest_firmware_tag=$(echo "$releases_json" | grep -o '"tag_name": "firmware-v[^"]*"' | head -1 | sed 's/"tag_name": "//;s/"$//')
+  
+  if [ -z "$latest_firmware_tag" ]; then
+    echo -e "${YELLOW}No firmware releases found on GitHub. Will use existing firmware if available.${NC}"
+    return 1
+  fi
+  
+  echo -e "${GREEN}Found latest firmware release: $latest_firmware_tag${NC}"
+  
+  # Extract version number from tag (e.g., firmware-v1.0.103 -> 1.0.103)
+  local firmware_version
+  firmware_version=$(echo "$latest_firmware_tag" | sed 's/firmware-v//')
+  
+  # Define paths for debug and release firmware
+  local debug_zip="firmware_v${firmware_version}_debug.zip"
+  local release_zip="firmware_v${firmware_version}_release.zip"
+  local debug_url="https://github.com/$GITHUB_REPO/releases/download/$latest_firmware_tag/$debug_zip"
+  local release_url="https://github.com/$GITHUB_REPO/releases/download/$latest_firmware_tag/$release_zip"
+  
+  # Download debug firmware
+  echo -e "${YELLOW}Downloading debug firmware...${NC}"
+  if curl -L -s -f -o "/tmp/$debug_zip" "$debug_url"; then
+    echo -e "${GREEN}Successfully downloaded debug firmware.${NC}"
+    
+    # Extract debug firmware
+    echo -e "${YELLOW}Extracting debug firmware...${NC}"
+    rm -rf "firmware/debug/waterBee_${firmware_version}_debug_merged"
+    unzip -q -o "/tmp/$debug_zip" -d firmware/
+    rm "/tmp/$debug_zip"
+    
+    echo -e "${GREEN}Debug firmware extracted to firmware/debug/${NC}"
+  else
+    echo -e "${RED}Failed to download debug firmware from $debug_url${NC}"
+  fi
+  
+  # Download release firmware
+  echo -e "${YELLOW}Downloading release firmware...${NC}"
+  if curl -L -s -f -o "/tmp/$release_zip" "$release_url"; then
+    echo -e "${GREEN}Successfully downloaded release firmware.${NC}"
+    
+    # Extract release firmware
+    echo -e "${YELLOW}Extracting release firmware...${NC}"
+    rm -rf "firmware/release/waterBee_${firmware_version}_release_merged"
+    unzip -q -o "/tmp/$release_zip" -d firmware/
+    rm "/tmp/$release_zip"
+    
+    echo -e "${GREEN}Release firmware extracted to firmware/release/${NC}"
+  else
+    echo -e "${RED}Failed to download release firmware from $release_url${NC}"
+  fi
+  
+  return 0
+}
 
 ##############################################################################
 # Function to detect available serial ports
@@ -181,7 +259,14 @@ choose_firmware() {
   
   if [ ${#available_versions[@]} -eq 0 ]; then
     echo -e "${RED}No $firmware_type firmware versions found in $base_dir${NC}"
-    exit 1
+    echo -e "${YELLOW}Attempting to download firmware from GitHub...${NC}"
+    download_latest_firmware
+    available_versions=($(find_firmware_versions "$base_dir"))
+    
+    if [ ${#available_versions[@]} -eq 0 ]; then
+      echo -e "${RED}Unable to find or download any firmware.${NC}"
+      exit 1
+    fi
   fi
   
   echo -e "${GREEN}Found ${#available_versions[@]} version(s):${NC}"
@@ -208,81 +293,121 @@ choose_firmware() {
     selected_version="$latest_version"
   fi
   
-  FOLDER="$base_dir/$selected_version"
+  FIRMWARE_PATH="$base_dir/$selected_version"
+  echo -e "${BLUE}Selected firmware: $FIRMWARE_PATH${NC}"
 }
 
 ##############################################################################
-# Helper function to find latest version in a directory
-##############################################################################
-find_latest() {
-  local base="$1"
-  [[ -d "$base" ]] || return 1
-  ls -1 "$base" | sort -V | tail -n1
-}
-
-##############################################################################
-# Main execution
+# Main Script Logic
 ##############################################################################
 
-# Check if interactive mode
-if [[ $# -eq 0 ]]; then
-  # Interactive mode
-  choose_firmware
-  detect_ports
-elif [[ $1 == "debug" ]]; then
-  # Quick debug mode - use latest debug firmware
-  FOLDER="firmware/debug/$(find_latest firmware/debug)"
-  # Ask for port if not provided
-  if [[ $# -lt 2 ]]; then
-    detect_ports
-  else
-    PORT="$2"
-  fi
-elif [[ $1 == "release" ]]; then
-  # Quick release mode - use latest release firmware
-  FOLDER="firmware/release/$(find_latest firmware/release)"
-  # Ask for port if not provided
-  if [[ $# -lt 2 ]]; then
-    detect_ports
-  else
-    PORT="$2"
+# First try to download latest firmware (won't replace existing if download fails)
+download_latest_firmware
+
+# Check if a folder is specified
+if [ $# -ge 1 ] && [ "$1" != "debug" ] && [ "$1" != "release" ]; then
+  # Use the specified folder
+  FIRMWARE_PATH="$1"
+elif [ $# -ge 1 ]; then
+  # Use debug or release mode
+  if [ "$1" == "debug" ]; then
+    # Find latest debug version
+    base_dir="firmware/debug"
+    available_versions=($(find_firmware_versions "$base_dir"))
+    
+    if [ ${#available_versions[@]} -eq 0 ]; then
+      echo -e "${RED}No debug firmware found. Trying to download...${NC}"
+      download_latest_firmware
+      available_versions=($(find_firmware_versions "$base_dir"))
+      
+      if [ ${#available_versions[@]} -eq 0 ]; then
+        echo -e "${RED}Unable to find or download any debug firmware.${NC}"
+        exit 1
+      fi
+    fi
+    
+    latest_version="${available_versions[${#available_versions[@]}-1]}"
+    FIRMWARE_PATH="$base_dir/$latest_version"
+  else # release
+    # Find latest release version
+    base_dir="firmware/release"
+    available_versions=($(find_firmware_versions "$base_dir"))
+    
+    if [ ${#available_versions[@]} -eq 0 ]; then
+      echo -e "${RED}No release firmware found. Trying to download...${NC}"
+      download_latest_firmware
+      available_versions=($(find_firmware_versions "$base_dir"))
+      
+      if [ ${#available_versions[@]} -eq 0 ]; then
+        echo -e "${RED}Unable to find or download any release firmware.${NC}"
+        exit 1
+      fi
+    fi
+    
+    latest_version="${available_versions[${#available_versions[@]}-1]}"
+    FIRMWARE_PATH="$base_dir/$latest_version"
   fi
 else
-  # Use provided folder
-  FOLDER="$1"
-  # Use provided port or detect if not provided
-  if [[ $# -lt 2 ]]; then
-    detect_ports
-  else
-    PORT="$2"
-  fi
+  # Interactive mode
+  choose_firmware
 fi
 
-##############################################################################
-# Check if folder exists and contains required files
-##############################################################################
-[[ -d "$FOLDER" ]] || { echo -e "${RED}ERROR: Folder '$FOLDER' not found${NC}" >&2 ; exit 2; }
+echo -e "${BLUE}Selected firmware: $FIRMWARE_PATH${NC}"
 
-BIN=$(ls "$FOLDER"/*.bin 2>/dev/null | head -n1)
-ARGS_FILE="$FOLDER/flash_args"
+# Check if the specified folder exists
+if [ ! -d "$FIRMWARE_PATH" ]; then
+  echo -e "${RED}Firmware folder not found: $FIRMWARE_PATH${NC}"
+  exit 1
+fi
 
-[[ -f "$BIN" ]] || { echo -e "${RED}ERROR: merged .bin not found in $FOLDER${NC}" >&2 ; exit 3; }
-[[ -f "$ARGS_FILE" ]] || { echo -e "${RED}ERROR: flash_args not found in $FOLDER${NC}" >&2 ; exit 4; }
+# Check if a port was specified as the second argument
+if [ $# -ge 2 ]; then
+  PORT="$2"
+else
+  # If no port was specified, try to detect available ports
+  detect_ports
+fi
 
-echo -e "${BLUE}------------------------------------------------------------${NC}"
-echo -e "${BLUE} WaterBee flasher${NC}"
-echo -e "${BLUE}------------------------------------------------------------${NC}"
-echo -e "${GREEN}  Folder : $FOLDER${NC}"
-echo -e "${GREEN}  Binary : $(basename "$BIN")${NC}"
-echo -e "${GREEN}  Port   : $PORT  (baud $BAUD)${NC}"
-echo -e "${GREEN}  Using  : $(python --version)${NC}"
-echo -e "${BLUE}------------------------------------------------------------${NC}"
+echo -e "${BLUE}Using port: $PORT${NC}"
 
-read -rp "Press <Enter> to FLASH, or Ctrl‑C to abort " _
+# Check if the bin file exists in the folder
+BIN_FILE=$(find "$FIRMWARE_PATH" -name "*.bin" | head -1)
+if [ -z "$BIN_FILE" ]; then
+  echo -e "${RED}No .bin file found in $FIRMWARE_PATH${NC}"
+  exit 1
+fi
 
-python -m esptool --chip "$TARGET" -b "$BAUD" -p "$PORT" \
-      --before default_reset --after hard_reset \
-      write_flash "@$ARGS_FILE"
+# Check if flash_args file exists
+FLASH_ARGS="$FIRMWARE_PATH/flash_args"
+if [ ! -f "$FLASH_ARGS" ]; then
+  echo -e "${RED}flash_args not found in $FIRMWARE_PATH${NC}"
+  exit 1
+fi
 
-echo -e "\n${GREEN}Flash OK!${NC}  You can now open a serial monitor:"
-echo -e "    python -m esptool --chip $TARGET -p $PORT monitor"
+# Build the esptool command
+echo -e "${BLUE}Building flash command...${NC}"
+FLASH_CMD="python -m esptool --chip $TARGET --port $PORT --baud $BAUD --before default_reset --after hard_reset"
+
+# Add flash arguments from the file
+while IFS= read -r line || [[ -n "$line" ]]; do
+  # Skip comments and empty lines
+  if [[ ! "$line" =~ ^# ]] && [[ -n "$line" ]]; then
+    FLASH_CMD="$FLASH_CMD $line"
+  fi
+done < "$FLASH_ARGS"
+
+# Show the command that will be executed
+echo -e "${YELLOW}About to execute:${NC}"
+echo -e "${BLUE}$FLASH_CMD${NC}"
+echo -e "${YELLOW}Press Enter to continue or Ctrl+C to abort${NC}"
+read -r
+
+# Execute the flash command
+echo -e "${GREEN}Flashing...${NC}"
+eval "$FLASH_CMD"
+
+echo -e "${GREEN}Firmware flashed successfully!${NC}"
+echo -e "${BLUE}To monitor the device, run:${NC}"
+echo -e "${YELLOW}python -m esptool --chip $TARGET --port $PORT monitor${NC}"
+
+exit 0
