@@ -110,6 +110,10 @@ download_latest_firmware() {
   local debug_url="https://github.com/$GITHUB_REPO/releases/download/$latest_firmware_tag/$debug_zip"
   local release_url="https://github.com/$GITHUB_REPO/releases/download/$latest_firmware_tag/$release_zip"
   
+  # Define version folders
+  local debug_dir="firmware/debug/waterBee_${firmware_version}_debug_merged"
+  local release_dir="firmware/release/waterBee_${firmware_version}_release_merged"
+  
   # Download debug firmware
   echo -e "${YELLOW}Downloading debug firmware...${NC}"
   if curl -L -s -f -o "/tmp/$debug_zip" "$debug_url"; then
@@ -117,11 +121,12 @@ download_latest_firmware() {
     
     # Extract debug firmware
     echo -e "${YELLOW}Extracting debug firmware...${NC}"
-    rm -rf "firmware/debug/waterBee_${firmware_version}_debug_merged"
-    unzip -q -o "/tmp/$debug_zip" -d firmware/
+    rm -rf "$debug_dir"
+    mkdir -p "$debug_dir"
+    unzip -q -o "/tmp/$debug_zip" -d "$debug_dir"
     rm "/tmp/$debug_zip"
     
-    echo -e "${GREEN}Debug firmware extracted to firmware/debug/${NC}"
+    echo -e "${GREEN}Debug firmware extracted to $debug_dir${NC}"
   else
     echo -e "${RED}Failed to download debug firmware from $debug_url${NC}"
   fi
@@ -133,11 +138,12 @@ download_latest_firmware() {
     
     # Extract release firmware
     echo -e "${YELLOW}Extracting release firmware...${NC}"
-    rm -rf "firmware/release/waterBee_${firmware_version}_release_merged"
-    unzip -q -o "/tmp/$release_zip" -d firmware/
+    rm -rf "$release_dir"
+    mkdir -p "$release_dir"
+    unzip -q -o "/tmp/$release_zip" -d "$release_dir"
     rm "/tmp/$release_zip"
     
-    echo -e "${GREEN}Release firmware extracted to firmware/release/${NC}"
+    echo -e "${GREEN}Release firmware extracted to $release_dir${NC}"
   else
     echo -e "${RED}Failed to download release firmware from $release_url${NC}"
   fi
@@ -212,12 +218,21 @@ find_firmware_versions() {
   local versions=()
   
   if [ -d "$base_dir" ]; then
-    # Use a for loop instead of mapfile for better compatibility
+    # First check for subdirectories (original behavior)
     for file in "$base_dir"/*; do
       if [ -d "$file" ]; then
         versions+=("$(basename "$file")")
       fi
     done
+    
+    # If no subdirectories found, check if we have bin files directly in the directory
+    if [ ${#versions[@]} -eq 0 ]; then
+      if ls "$base_dir"/*.bin >/dev/null 2>&1; then
+        # If bin files found, create a dummy version name based on directory
+        local dir_name=$(basename "$base_dir")
+        versions+=("$dir_name")
+      fi
+    fi
     
     # Sort versions (compatible with bash 3.x on macOS)
     # Check if any versions were found first to avoid unbound variable error
@@ -311,7 +326,15 @@ choose_firmware() {
     selected_version="$latest_version"
   fi
   
-  FIRMWARE_PATH="$base_dir/$selected_version"
+  # Check if the selected version is a directory name or the same as base_dir name
+  if [ "$selected_version" = "$(basename "$base_dir")" ]; then
+    # Files are directly in the base directory
+    FIRMWARE_PATH="$base_dir"
+  else
+    # Files are in a subdirectory
+    FIRMWARE_PATH="$base_dir/$selected_version"
+  fi
+  
   echo -e "${BLUE}Selected firmware: $FIRMWARE_PATH${NC}"
 }
 
@@ -354,7 +377,15 @@ elif [ $# -ge 1 ]; then
     fi
     
     latest_version="${available_versions[${#available_versions[@]}-1]}"
-    FIRMWARE_PATH="$base_dir/$latest_version"
+    
+    # Check if the latest version is a directory name or the same as base_dir name
+    if [ "$latest_version" = "$(basename "$base_dir")" ]; then
+      # Files are directly in the base directory
+      FIRMWARE_PATH="$base_dir"
+    else
+      # Files are in a subdirectory
+      FIRMWARE_PATH="$base_dir/$latest_version"
+    fi
   else # release
     # Find latest release version
     base_dir="firmware/release"
@@ -381,7 +412,15 @@ elif [ $# -ge 1 ]; then
     fi
     
     latest_version="${available_versions[${#available_versions[@]}-1]}"
-    FIRMWARE_PATH="$base_dir/$latest_version"
+    
+    # Check if the latest version is a directory name or the same as base_dir name
+    if [ "$latest_version" = "$(basename "$base_dir")" ]; then
+      # Files are directly in the base directory
+      FIRMWARE_PATH="$base_dir"
+    else
+      # Files are in a subdirectory
+      FIRMWARE_PATH="$base_dir/$latest_version"
+    fi
   fi
 else
   # Interactive mode
