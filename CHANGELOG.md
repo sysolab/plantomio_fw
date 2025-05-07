@@ -1,5 +1,20 @@
 # WaterBee Firmware Flasher Changelog
 
+## v1.2.1 - 09.May.2024
+
+### Improvements
+- Optimized release scripts to only detect and release the latest versions:
+  - Fixed version detection logic to properly identify the newest version
+  - Improved filtering to only release files for the latest version
+  - Removed unnecessary ZIP packaging from release_app.sh
+  - Enhanced validation to ensure proper version detection
+  - Added robust sorting and comparison of version numbers
+
+### Bug Fixes
+- Fixed issue in release_app.sh where older APK versions were being released alongside newer ones
+- Improved version extraction from filenames with better regex pattern matching
+- Fixed release_fw.sh to only release the latest firmware builds
+
 ## v1.2.0 - 08.May.2024
 
 ### Features
