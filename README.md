@@ -57,21 +57,7 @@ source ./setup.sh
 
 ### Downloading Firmware
 
-Firmware files are available as GitHub releases and not directly in the repository. You can download them by:
-
-1. **Visiting the GitHub Releases Page**:
-   - Go to [https://github.com/sysolab/plantomio_fw/releases](https://github.com/sysolab/plantomio_fw/releases)
-   - Look for the latest firmware release (tagged with `firmware-v*`)
-   - Download the appropriate firmware zip file:
-     - `firmware_v*_debug.zip` - For development and testing
-     - `firmware_v*_release.zip` - For production use
-
-2. After downloading, extract the files to the `firmware` directory:
-   ```bash
-   mkdir -p firmware/debug firmware/release
-   unzip firmware_v*_debug.zip -d firmware/
-   unzip firmware_v*_release.zip -d firmware/
-   ```
+The firmware flash script will automatically download and extract the latest firmware from GitHub releases when needed. You don't need to download firmware files manually.
 
 ### Flashing Instructions
 
@@ -82,18 +68,19 @@ The flashing script provides an interactive way to flash your WaterBee device:
 ```
 
 This will:
-1. Ask if you want to flash a debug or release firmware
-2. Show available firmware versions
-3. Detect available serial ports
-4. Flash the selected firmware to the selected port
+1. Automatically download the latest firmware release from GitHub if needed
+2. Ask if you want to flash a debug or release firmware
+3. Show available firmware versions
+4. Detect available serial ports
+5. Flash the selected firmware to the selected port
 
 #### Alternative Flashing Methods
 
 ```bash
-# Flash latest release firmware
+# Flash latest *release* firmware
 ./flash_waterbee.sh release
 
-# Flash latest debug firmware
+# Flash latest *debug* firmware
 ./flash_waterbee.sh debug
 
 # Flash a specific firmware and specify the port
@@ -114,32 +101,35 @@ Replace `<PORT>` with your device's port (the same one used for flashing).
 
 ### Downloading the APK
 
-Android APK files are available as GitHub releases. You can download them by:
+Android APK files are available as GitHub releases. The easiest way to download them is using the provided script:
 
-1. **Visiting the GitHub Releases Page**:
-   - Go to [https://github.com/sysolab/plantomio_fw/releases](https://github.com/sysolab/plantomio_fw/releases)
-   - Look for the latest Android release (tagged with `android-v*`)
-   - Download the appropriate APK file:
-     - `waterBee_universal-release_v*.apk` - Works on all Android devices
-     - `waterBee_arm64-v8a-release_v*.apk` - For ARM64 devices
-     - `waterBee_armeabi-v7a-release_v*.apk` - For ARMv7 devices
-     - `waterBee_debug_v*.apk` - Debug version with additional logging
+```bash
+# Make the script executable
+chmod +x get_android_app.sh
 
-2. **Using the Automated Download Script**:
-   ```bash
-   # Make the script executable
-   chmod +x android_app_install.sh
-   
-   # Run the script
-   ./android_app_install.sh
-   ```
-   This will create an `android_app` directory with all APK variants.
+# Run the script
+./get_android_app.sh
+```
+
+This script will:
+1. Automatically fetch the latest Android app release from GitHub
+2. Download all available APK variants
+3. Create an `android_app` directory with the APK files
+4. Provide information about each APK variant and installation instructions
+
+Alternatively, you can manually download APK files from the [GitHub releases page](https://github.com/sysolab/plantomio_fw/releases).
 
 ### Installation
 
 1. Transfer the APK file to your Android device
 2. On your Android device, navigate to the APK file and tap to install
 3. You may need to enable "Install from Unknown Sources" in your Android settings
+
+Choose the appropriate APK variant for your device:
+- **arm64-v8a** - For modern Android devices (64-bit ARM)
+- **armeabi-v7a** - For older Android devices (32-bit ARM)
+- **universal** - Works on any Android device (larger file size)
+- **debug** - For development and testing (includes logging)
 
 ## For Contributors
 
@@ -207,12 +197,21 @@ The script will:
   ./setup.sh
   ```
 
+### Download Issues
+
+- If you're having trouble downloading firmware or APK files:
+  1. Check your internet connection
+  2. Verify that the GitHub releases exist
+  3. If GitHub API rate limits are exceeded, wait and try again later
+  4. You can manually download files from the [releases page](https://github.com/sysolab/plantomio_fw/releases)
+
 ## Technical Details
 
 - Uses esptool.py for ESP32 firmware flashing
 - Target chip: ESP32C6
 - Default baud rate: 460800
 - Flashing process includes both partition table and application binary
+- Both scripts use GitHub API to fetch the latest releases automatically
 
 ## License
 
