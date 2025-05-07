@@ -16,7 +16,7 @@ A comprehensive toolset for the WaterBee ESP32C6-based irrigation and plant moni
   - [Downloading the APK](#downloading-the-apk)
   - [Installation](#installation)
 - [For Contributors](#for-contributors)
-  - [Auto-Release Script](#auto-release-script)
+  - [Release Scripts](#release-scripts)
   - [Creating New Releases](#creating-new-releases)
 - [Troubleshooting](#troubleshooting)
 - [Technical Details](#technical-details)
@@ -133,30 +133,44 @@ Choose the appropriate APK variant for your device:
 
 ## For Contributors
 
-### Auto-Release Script
+### Release Scripts
 
-The `auto_release.sh` script automates the process of creating and publishing releases:
+The repository includes dedicated scripts for releasing firmware and Android applications to GitHub:
+
+#### Firmware Release (`release_fw.sh`)
 
 ```bash
-# Install dependencies (one-time setup)
-brew install jq
-brew install gh  # Optional but recommended
-
-# If using GitHub CLI
-gh auth login
-
-# If using API method instead
+# Set GitHub token (if not using GitHub CLI)
 export GITHUB_TOKEN=your_personal_access_token
 
 # Run the script
-./auto_release.sh
+./release_fw.sh
 ```
 
-The script will:
-- Detect version numbers from firmware and APK files
-- Create appropriate tags
-- Generate release notes
-- Upload files to GitHub releases
+This script will:
+- Automatically detect firmware versions from directory names in the firmware folder
+- Create proper release notes with installation instructions
+- Package firmware into zip files for easy distribution
+- Create GitHub releases with the tag format: `firmware-v1.0.103`
+
+#### Android App Release (`release_app.sh`)
+
+```bash
+# Set GitHub token (if not using GitHub CLI)
+export GITHUB_TOKEN=your_personal_access_token
+
+# Run the script
+./release_app.sh
+```
+
+This script will:
+- Automatically detect APK files in the android_app directory
+- Extract version number from APK filenames
+- Create a combined ZIP file with all APK variants
+- Generate detailed release notes with information about each APK variant
+- Create GitHub releases with the tag format: `android-v1.6.0`
+
+Both scripts support using either the GitHub CLI (if installed) or the GitHub API with a personal access token.
 
 ### Creating New Releases
 
@@ -167,9 +181,13 @@ The script will:
 2. Place new APK files in:
    - `android_app/`
 
-3. Run the auto-release script:
+3. Run the appropriate release script:
    ```bash
-   ./auto_release.sh
+   # For firmware releases
+   ./release_fw.sh
+   
+   # For Android app releases
+   ./release_app.sh
    ```
 
 ## Troubleshooting
@@ -211,7 +229,9 @@ The script will:
 - Target chip: ESP32C6
 - Default baud rate: 460800
 - Flashing process includes both partition table and application binary
-- Both scripts use GitHub API to fetch the latest releases automatically
+- Release scripts support both GitHub CLI and API methods for releases
+- Scripts use GitHub API to fetch the latest releases automatically
+- Local directories (`firmware/` and `android_app/`) are used for staging files but not tracked in git
 
 ## License
 
