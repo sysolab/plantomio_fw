@@ -27,7 +27,7 @@ A comprehensive toolset for the WaterBee ESP32C6-based irrigation and plant moni
 
 The WaterBee system consists of two main components:
 
-1. **ESP32C6 Firmware** - Runs on the WaterBee hardware device, controlling sensors and irrigation systems
+1. **WaterBee Firmware** - Runs on the WaterBee hardware device, controlling sensors and irrigation systems
 2. **Android Application** - Allows users to control and monitor their WaterBee devices
 
 This repository provides the tools to install and manage both components.
@@ -130,6 +130,73 @@ Choose the appropriate APK variant for your device:
 - **armeabi-v7a** - For older Android devices (32-bit ARM)
 - **universal** - Works on any Android device (larger file size)
 - **debug** - For development and testing (includes logging)
+
+
+
+## LED Status Codes
+
+The system uses an RGB LED to indicate various operational states and events. The following table documents all LED status patterns:
+
+| Status Pattern | Visual Indication | Description | When It Occurs |
+|----------------|-------------------|-------------|----------------|
+| `led_status_ok` | Single green flash | Operation successful | After successful initialization, operation completion |
+| `led_status_working` | Green fade effect | System is working normally | During normal processing tasks |
+| `led_status_connecting` | Blue disco (pulsing) | Device is connecting | During WiFi or Bluetooth connection attempts |
+| `led_status_connected` | Solid green | Connection established | When WiFi or BLE connection is established |
+| `led_status_warning` | Yellow flash | Warning condition | Non-critical issues that require attention |
+| `led_status_error` | Red flash | Error detected | When an operation fails or error occurs |
+| `led_status_critical` | Fast red flashing | Critical error | Severe system problems that may require reset |
+| `led_status_boot` | Blue breath | System booting | During system initialization at startup |
+| `led_status_self_test` | White disco | Self-test in progress | During internal diagnostics |
+| `led_status_data_sending` | Blue-green pulse | Transmitting data | When sending data to server/cloud |
+| `led_status_sensor_error` | Red-yellow alternating | Sensor malfunction | When a sensor reading fails or gives invalid data |
+| `led_status_low_battery` | Orange flash | Low battery warning | When battery level is below threshold |
+| `led_status_factory_reset` | Rainbow effect | Factory reset in progress | During configuration reset to defaults |
+| `led_status_ota_update` | Cyan pulse | Firmware update | During over-the-air firmware updates |
+| `led_status_no_wifi` | Orange disco | No WiFi credentials | When no valid WiFi credentials are configured |
+| `led_status_ble_advertising` | Blue breath | BLE advertising active | When device is in BLE advertising mode |
+| `led_status_measurement` | Orange light | Measurement in progress | During sensor measurement cycles |
+
+### LED Usage in Code
+
+To use these status indicators in your code:
+
+```c
+// Initialize LED hardware first (usually done in main.c)
+led_initialize();
+
+// Show a status pattern
+led_status_connecting();  // Example: Show the connecting status pattern
+
+// Direct LED control is also available
+led_red_on();   // Turn on red LED
+led_green_on(); // Turn on green LED
+led_blue_on();  // Turn on blue LED
+led_off();      // Turn off all LEDs
+```
+
+### Error Sequence Priority
+
+When multiple conditions occur simultaneously, LED patterns follow this priority order:
+
+1. Critical errors (highest priority)
+2. Errors
+3. Warnings
+4. Connection status
+5. Operational status (lowest priority)
+
+### Technical Details
+
+The LED controller uses the RMT (Remote Control) peripheral for precise timing control of the RGB LED. The implementation includes:
+
+- Fade effects using PWM-like brightness control
+- Breathing patterns with smooth transitions
+- Disco effects with color transitions
+- Task-based background patterns that don't block the main application
+- Safe resource management to prevent resource leaks
+
+The LED components draw power from the 3.3V rail and use minimal current to preserve battery life.
+
 
 ## For Contributors
 
