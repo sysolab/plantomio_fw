@@ -1,0 +1,86 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+.waterBeeFW/
+waterBeeFW/
+env/
+.Python
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+.installed.cfg
+*.egg
+
+# Logs
+logs/
+*.log
+
+# Binary files
+*.bin
+*.apk
+
+# Release files and folders
+android_app/
+Android_app/
+firmware/
+App/
+releases/
+release_packages/
+
+# Temporary files
+tmp/
+*.tmp
+tmp_*
+data/
+
+# Mac OS specific files
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ESP-IDF build files
+esp-build/
+
+# Serial monitor logs
+monitor_logs/
+
+# Docker
+.env
+.dockerignore
+
+# Environment configuration
+.env 

@@ -1,0 +1,4 @@
+pyserial>=3.5
+esptool>=4.5.1
+pyusb>=1.2.1
+requests>=2.25.1 
