@@ -1,6 +1,6 @@
 # WaterBee Firmware and Application
 
-A comprehensive toolset for the WaterBee ESP32C6-based irrigation and plant monitoring system. This repository provides tools to flash firmware to WaterBee devices, download Android applications, and manage releases.
+This repository provides tools to flash firmware to WaterBee devices, download Android applications, and manage releases.
 
 ## Table of Contents
 
