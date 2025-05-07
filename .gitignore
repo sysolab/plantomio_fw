@@ -38,7 +38,8 @@ firmware/*.bin
 
 # Android app files
 *.apk
-Android_app/*.apk
+android_app/
+Android_app/
 
 # Temporary files
 tmp/
