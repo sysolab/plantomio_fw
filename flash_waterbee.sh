@@ -7,10 +7,10 @@ set -euo pipefail
 ##############################################################################
 # USER‑TUNABLE DEFAULTS
 ##############################################################################
-DEFAULT_PORT=${PORT:-/dev/ttyUSB0}     # override:  PORT=/dev/ttyACMx ./flash_waterbee.sh
-BAUD=${BAUD:-460800}
+DEFAULT_PORT=${PORT:-/dev/tty.usbmodem2101}     # override:  PORT=/dev/ttyACMx ./flash_waterbee.sh
+BAUD=${BAUD:-115200}
 TARGET=esp32c6
-VENV_PATH=".waterBeeFW"  # Path to the hidden virtual environment
+VENV_PATH="./.venv"  # Path to the hidden virtual environment
 ##############################################################################
 
 # Colors for terminal output
