@@ -8,31 +8,108 @@
 # - Updated to handle merged binary files properly
 # - Added option to erase flash before flashing
 # - Fixed monitoring command to use miniterm instead of esptool
+# - Added --all flag to control firmware download behavior
+# - Improved cross-platform compatibility (macOS and Linux)
 # --------------------------------------------------------------------
 set -euo pipefail
 
 ##############################################################################
 # USER‑TUNABLE DEFAULTS
 ##############################################################################
-DEFAULT_PORT=${PORT:-/dev/tty.usbmodem2101}     # override:  PORT=/dev/ttyACMx ./flash_waterbee.sh
+DEFAULT_PORT=""     # Will be auto-detected based on OS
 BAUD=${BAUD:-115200}
 TARGET=esp32c6
 VENV_PATH="./.venv"  # Path to the hidden virtual environment
 GITHUB_REPO="sysolab/plantomio_fw"  # GitHub repository
+DOWNLOAD_ALL=0  # Default to only download latest firmware
+ERASE_FLASH=0   # Default to not erase flash
 ##############################################################################
 
-# Colors for terminal output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# OS Detection - use uname for better compatibility
+OS_TYPE="unknown"
+if [[ "$(uname)" == "Darwin" ]]; then
+  OS_TYPE="macos"
+  DEFAULT_PORT="/dev/tty.usbmodem2101"  # Default for macOS
+elif [[ "$(uname)" == "Linux" || "$(uname)" == "linux-gnu"* ]]; then
+  OS_TYPE="linux"
+  DEFAULT_PORT="/dev/ttyACM0"  # Default for Linux
+fi
+echo "Detected OS: $OS_TYPE"
+
+# Set PORT from environment or default
+PORT=${PORT:-$DEFAULT_PORT}
+
+# Check for required commands
+for cmd in curl grep sed python unzip; do
+  if ! command -v $cmd &> /dev/null; then
+    echo "Error: $cmd is required but not installed. Please install it and try again."
+    exit 1
+  fi
+done
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --all)
+      DOWNLOAD_ALL=1
+      shift
+      ;;
+    --erase)
+      ERASE_FLASH=1
+      shift
+      ;;
+    debug|release)
+      # Handle these arguments later
+      break
+      ;;
+    -h|--help)
+      show_help=1
+      shift
+      ;;
+    *)
+      # Unknown option, will be handled by original parsing
+      break
+      ;;
+  esac
+done
+
+# Colors for terminal output (using tput for better compatibility)
+if [ -t 1 ]; then  # Check if stdout is a terminal
+  if command -v tput &> /dev/null; then
+    RED=$(tput setaf 1)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    BLUE=$(tput setaf 4)
+    NC=$(tput sgr0)  # No Color
+  else
+    # Fallback to ANSI color codes
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+  fi
+else
+  # No colors if not a terminal
+  RED=''
+  GREEN=''
+  YELLOW=''
+  BLUE=''
+  NC=''
+fi
 
 show_help() {
   cat <<EOF
 Usage:
-  ./flash_waterbee.sh [FOLDER] [PORT]
+  ./flash_waterbee.sh [OPTIONS] [FOLDER] [PORT]
 
+Options:
+  --all           Download all firmware versions instead of just the latest
+  --erase         Erase flash before flashing (instead of being asked)
+  -h, --help      Show this help message
+
+Arguments:
   FOLDER  Folder that contains the firmware artefacts (merged .bin + flash_args).
           • If omitted  =>  interactive mode will be used
           • If "debug"  =>  latest build inside firmware/debug/ is used
@@ -52,13 +129,19 @@ Examples
   # flash latest *debug*
   ./flash_waterbee.sh debug
 
+  # Download all firmware versions and flash latest release
+  ./flash_waterbee.sh --all release
+
+  # Erase flash before flashing latest release
+  ./flash_waterbee.sh --erase release
+
   # flash an explicit folder on a specific port
   ./flash_waterbee.sh firmware/debug/waterBee_debug_1.0.47 /dev/tty.usbserial‑0001
 EOF
   exit 0
 }
 
-[[ ${1:-} == "-h" || ${1:-} == "--help" ]] && show_help
+[[ ${show_help:-0} -eq 1 ]] && show_help
 
 ##############################################################################
 # Check for virtual environment
@@ -96,64 +179,96 @@ download_latest_firmware() {
     return 1
   fi
   
-  # Find latest firmware release (tag that starts with firmware-v)
-  local latest_firmware_tag
-  latest_firmware_tag=$(echo "$releases_json" | grep -o '"tag_name": "firmware-v[^"]*"' | head -1 | sed 's/"tag_name": "//;s/"$//')
-  
-  if [ -z "$latest_firmware_tag" ]; then
-    echo -e "${YELLOW}No firmware releases found on GitHub. Will use existing firmware if available.${NC}"
-    return 1
-  fi
-  
-  echo -e "${GREEN}Found latest firmware release: $latest_firmware_tag${NC}"
-  
-  # Extract version number from tag (e.g., firmware-v1.0.103 -> 1.0.103)
-  local firmware_version
-  firmware_version=$(echo "$latest_firmware_tag" | sed 's/firmware-v//')
-  
-  # Define paths for debug and release firmware
-  local debug_zip="firmware_v${firmware_version}_debug.zip"
-  local release_zip="firmware_v${firmware_version}_release.zip"
-  local debug_url="https://github.com/$GITHUB_REPO/releases/download/$latest_firmware_tag/$debug_zip"
-  local release_url="https://github.com/$GITHUB_REPO/releases/download/$latest_firmware_tag/$release_zip"
-  
-  # Define version folders
-  local debug_dir="firmware/debug/waterBee_${firmware_version}_debug_merged"
-  local release_dir="firmware/release/waterBee_${firmware_version}_release_merged"
-  
-  # Download debug firmware
-  echo -e "${YELLOW}Downloading debug firmware...${NC}"
-  if curl -L -s -f -o "/tmp/$debug_zip" "$debug_url"; then
-    echo -e "${GREEN}Successfully downloaded debug firmware.${NC}"
+  # Find all firmware releases (tag that starts with firmware-v)
+  local firmware_tags=()
+  if [ $DOWNLOAD_ALL -eq 1 ]; then
+    # Get all firmware tags
+    while read -r tag; do
+      firmware_tags+=("$tag")
+    done < <(echo "$releases_json" | grep -o '"tag_name": "firmware-v[^"]*"' | sed 's/"tag_name": "//;s/"$//')
     
-    # Extract debug firmware
-    echo -e "${YELLOW}Extracting debug firmware...${NC}"
-    rm -rf "$debug_dir"
-    mkdir -p "$debug_dir"
-    unzip -q -o "/tmp/$debug_zip" -d "$debug_dir"
-    rm "/tmp/$debug_zip"
+    if [ ${#firmware_tags[@]} -eq 0 ]; then
+      echo -e "${YELLOW}No firmware releases found on GitHub. Will use existing firmware if available.${NC}"
+      return 1
+    fi
     
-    echo -e "${GREEN}Debug firmware extracted to $debug_dir${NC}"
+    echo -e "${GREEN}Found ${#firmware_tags[@]} firmware releases.${NC}"
+    echo -e "${YELLOW}Downloading all firmware versions due to --all flag...${NC}"
   else
-    echo -e "${RED}Failed to download debug firmware from $debug_url${NC}"
+    # Get only the latest firmware tag
+    local latest_firmware_tag
+    latest_firmware_tag=$(echo "$releases_json" | grep -o '"tag_name": "firmware-v[^"]*"' | head -1 | sed 's/"tag_name": "//;s/"$//')
+    
+    if [ -z "$latest_firmware_tag" ]; then
+      echo -e "${YELLOW}No firmware releases found on GitHub. Will use existing firmware if available.${NC}"
+      return 1
+    fi
+    
+    firmware_tags=("$latest_firmware_tag")
+    echo -e "${GREEN}Found latest firmware release: $latest_firmware_tag${NC}"
+    echo -e "${YELLOW}Downloading only latest firmware version. Use --all flag to download all versions.${NC}"
   fi
   
-  # Download release firmware
-  echo -e "${YELLOW}Downloading release firmware...${NC}"
-  if curl -L -s -f -o "/tmp/$release_zip" "$release_url"; then
-    echo -e "${GREEN}Successfully downloaded release firmware.${NC}"
+  # Process each firmware tag
+  for tag in "${firmware_tags[@]}"; do
+    # Extract version number from tag (e.g., firmware-v1.0.103 -> 1.0.103)
+    local firmware_version
+    firmware_version=$(echo "$tag" | sed 's/firmware-v//')
     
-    # Extract release firmware
-    echo -e "${YELLOW}Extracting release firmware...${NC}"
-    rm -rf "$release_dir"
-    mkdir -p "$release_dir"
-    unzip -q -o "/tmp/$release_zip" -d "$release_dir"
-    rm "/tmp/$release_zip"
+    # Define paths for debug and release firmware
+    local debug_zip="firmware_v${firmware_version}_debug.zip"
+    local release_zip="firmware_v${firmware_version}_release.zip"
+    local debug_url="https://github.com/$GITHUB_REPO/releases/download/$tag/$debug_zip"
+    local release_url="https://github.com/$GITHUB_REPO/releases/download/$tag/$release_zip"
     
-    echo -e "${GREEN}Release firmware extracted to $release_dir${NC}"
-  else
-    echo -e "${RED}Failed to download release firmware from $release_url${NC}"
-  fi
+    # Define version folders
+    local debug_dir="firmware/debug/waterBee_${firmware_version}_debug_merged"
+    local release_dir="firmware/release/waterBee_${firmware_version}_release_merged"
+    
+    # Check if directories already exist and skip if they do (unless forced)
+    if [ -d "$debug_dir" ] && [ -d "$release_dir" ]; then
+      echo -e "${GREEN}Firmware version ${firmware_version} already downloaded. Skipping.${NC}"
+      continue
+    fi
+    
+    # Download debug firmware
+    if [ ! -d "$debug_dir" ]; then
+      echo -e "${YELLOW}Downloading debug firmware version ${firmware_version}...${NC}"
+      if curl -L -s -f -o "/tmp/$debug_zip" "$debug_url"; then
+        echo -e "${GREEN}Successfully downloaded debug firmware.${NC}"
+        
+        # Extract debug firmware
+        echo -e "${YELLOW}Extracting debug firmware...${NC}"
+        rm -rf "$debug_dir"
+        mkdir -p "$debug_dir"
+        unzip -q -o "/tmp/$debug_zip" -d "$debug_dir"
+        rm "/tmp/$debug_zip"
+        
+        echo -e "${GREEN}Debug firmware extracted to $debug_dir${NC}"
+      else
+        echo -e "${RED}Failed to download debug firmware from $debug_url${NC}"
+      fi
+    fi
+    
+    # Download release firmware
+    if [ ! -d "$release_dir" ]; then
+      echo -e "${YELLOW}Downloading release firmware version ${firmware_version}...${NC}"
+      if curl -L -s -f -o "/tmp/$release_zip" "$release_url"; then
+        echo -e "${GREEN}Successfully downloaded release firmware.${NC}"
+        
+        # Extract release firmware
+        echo -e "${YELLOW}Extracting release firmware...${NC}"
+        rm -rf "$release_dir"
+        mkdir -p "$release_dir"
+        unzip -q -o "/tmp/$release_zip" -d "$release_dir"
+        rm "/tmp/$release_zip"
+        
+        echo -e "${GREEN}Release firmware extracted to $release_dir${NC}"
+      else
+        echo -e "${RED}Failed to download release firmware from $release_url${NC}"
+      fi
+    fi
+  done
   
   return 0
 }
@@ -168,16 +283,18 @@ detect_ports() {
   local detected_ports=()
   
   # Check the operating system
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if [[ "$OS_TYPE" == "macos" ]]; then
     # macOS - Look for both USB and Bluetooth serial ports
-    for port in /dev/tty.usbmodem* /dev/tty.usbserial* /dev/tty.SLAB* /dev/cu.usbmodem*; do
+    # Use ls instead of direct expansion for better portability
+    for port in $(ls /dev/tty.usbmodem* /dev/tty.usbserial* /dev/tty.SLAB* /dev/cu.usbmodem* 2>/dev/null); do
       if [ -e "$port" ]; then
         detected_ports+=("$port")
       fi
     done
-  elif [[ "$(uname)" == "Linux" ]]; then
+  elif [[ "$OS_TYPE" == "linux" ]]; then
     # Linux
-    for port in /dev/ttyUSB* /dev/ttyACM* /dev/ttyS*; do
+    # Use ls instead of direct expansion for better portability
+    for port in $(ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* 2>/dev/null); do
       if [ -e "$port" ]; then
         detected_ports+=("$port")
       fi
@@ -364,7 +481,7 @@ elif [ $# -ge 1 ]; then
     available_versions_output=$(find_firmware_versions "$base_dir")
     
     # Convert output to array
-    local available_versions=()
+    available_versions=()
     if [ -n "$available_versions_output" ]; then
       read -r -a available_versions <<< "$available_versions_output"
     fi
@@ -399,7 +516,7 @@ elif [ $# -ge 1 ]; then
     available_versions_output=$(find_firmware_versions "$base_dir")
     
     # Convert output to array
-    local available_versions=()
+    available_versions=()
     if [ -n "$available_versions_output" ]; then
       read -r -a available_versions <<< "$available_versions_output"
     fi
@@ -461,9 +578,14 @@ fi
 
 echo -e "${GREEN}Found merged bin file: $BIN_FILE${NC}"
 
-# Ask if user wants to erase flash before flashing
-echo -e "${YELLOW}Do you want to erase the flash completely before flashing? (y/n)${NC}"
-read -r erase_flash
+# Ask if user wants to erase flash before flashing (if not specified by --erase flag)
+if [ $ERASE_FLASH -eq 0 ]; then
+  echo -e "${YELLOW}Do you want to erase the flash completely before flashing? (y/n)${NC}"
+  read -r erase_flash_answer
+  if [[ "$erase_flash_answer" =~ ^[Yy]$ ]]; then
+    ERASE_FLASH=1
+  fi
+fi
 
 # Build the esptool command
 echo -e "${BLUE}Building flash command...${NC}"
@@ -472,7 +594,7 @@ echo -e "${BLUE}Building flash command...${NC}"
 FLASH_CMD="python -m esptool --chip $TARGET --port $PORT --baud $BAUD --before default_reset --after hard_reset"
 
 # Erase flash if requested
-if [[ "$erase_flash" =~ ^[Yy]$ ]]; then
+if [ $ERASE_FLASH -eq 1 ]; then
   echo -e "${YELLOW}Erasing flash...${NC}"
   eval "$FLASH_CMD erase_flash"
   echo -e "${GREEN}Flash erased.${NC}"
@@ -490,7 +612,17 @@ read -r
 
 # Execute the flash command
 echo -e "${GREEN}Flashing...${NC}"
-eval "$FLASH_CMD"
+if ! eval "$FLASH_CMD"; then
+  # Check for port busy error
+  if grep -q "Resource temporarily unavailable" <<< "$(tail -n 20 flash.log 2>/dev/null)" || grep -q "port is busy" <<< "$(tail -n 20 flash.log 2>/dev/null)"; then
+    echo -e "${RED}ERROR: The selected port ($PORT) is busy or locked by another application.${NC}"
+    echo -e "${YELLOW}Please close any other program (e.g., serial monitor, Arduino IDE, screen, miniterm, etc.) that may be using this port and try again.${NC}"
+    echo -e "${YELLOW}You may also try unplugging and replugging the device.${NC}"
+    exit 2
+  fi
+  echo -e "${RED}Flashing failed. Please check the error message above.${NC}"
+  exit 1
+fi
 
 echo -e "${GREEN}Firmware flashed successfully!${NC}"
 echo -e "${BLUE}Do you want to monitor the device? (y/n)${NC}"

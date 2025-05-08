@@ -1,11 +1,29 @@
 #!/usr/bin/env bash
 
 # Colors for terminal output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+if [ -t 1 ]; then  # Check if stdout is a terminal
+  if command -v tput &> /dev/null; then
+    RED=$(tput setaf 1)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    BLUE=$(tput setaf 4)
+    NC=$(tput sgr0)  # No Color
+  else
+    # Fallback to ANSI color codes
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+  fi
+else
+  # No colors if not a terminal
+  RED=''
+  GREEN=''
+  YELLOW=''
+  BLUE=''
+  NC=''
+fi
 
 echo -e "${BLUE}ESP32 Firmware Flasher Setup${NC}"
 echo -e "================================\n"
@@ -14,19 +32,30 @@ echo -e "================================\n"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
+# Detect OS
+OS_TYPE="unknown"
+if [[ "$(uname)" == "Darwin" ]]; then
+  OS_TYPE="macos"
+elif [[ "$(uname)" == "Linux" ]]; then
+  OS_TYPE="linux"
+elif [[ "$(uname)" =~ "MINGW"|"MSYS" ]]; then
+  OS_TYPE="windows"
+fi
+echo -e "${YELLOW}Detected OS: $OS_TYPE${NC}"
+
 # Check Python installation
 echo -e "${YELLOW}Checking Python installation...${NC}"
 if ! command -v python3 &> /dev/null; then
     echo -e "${RED}Error: Python 3 is not installed.${NC}"
     echo -e "Please install Python 3 and try again."
     
-    if [[ "$(uname)" == "Darwin" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
         echo -e "\nOn macOS, you can install Python using Homebrew:"
         echo -e "  brew install python3"
-    elif [[ "$(uname)" == "Linux" ]]; then
+    elif [[ "$OS_TYPE" == "linux" ]]; then
         echo -e "\nOn Ubuntu/Debian, you can install Python using apt:"
         echo -e "  sudo apt update && sudo apt install python3 python3-pip python3-venv"
-    elif [[ "$(uname)" =~ "MINGW"|"MSYS" ]]; then
+    elif [[ "$OS_TYPE" == "windows" ]]; then
         echo -e "\nOn Windows, you can download Python from:"
         echo -e "  https://www.python.org/downloads/"
     fi
@@ -44,10 +73,10 @@ if [ $? -ne 0 ]; then
     echo -e "${RED}Failed to create virtual environment.${NC}"
     echo -e "You may need to install the Python venv package."
     
-    if [[ "$(uname)" == "Darwin" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
         echo -e "\nOn macOS:"
         echo -e "  brew install python3"
-    elif [[ "$(uname)" == "Linux" ]]; then
+    elif [[ "$OS_TYPE" == "linux" ]]; then
         echo -e "\nOn Ubuntu/Debian:"
         echo -e "  sudo apt install python3-venv"
     fi
@@ -105,6 +134,7 @@ fi
 # Make scripts executable
 echo -e "\n${YELLOW}Making scripts executable...${NC}"
 chmod +x flash_waterbee.sh
+chmod +x get_android_app.sh
 
 # Activate the virtual environment for the current session
 echo -e "\n${YELLOW}Activating virtual environment for current session...${NC}"
@@ -126,9 +156,10 @@ echo -e "${YELLOW}How to use the firmware flasher:${NC}"
 echo -e "\n${GREEN}# FLASH THE LATEST RELEASE BUILD${NC}"
 echo -e "./flash_waterbee.sh                       # uses the newest release"
 echo -e "\n${GREEN}# FLASH A SPECIFIC RELEASE${NC}"
-echo -e "./flash_waterbee.sh release/waterBee_release_1.0.60 /dev/ttyUSB0"
+echo -e "./flash_waterbee.sh release/waterBee_release_1.0.60"
 echo -e "\n${GREEN}# FLASH THE DEBUG BUILD${NC}"
 echo -e "./flash_waterbee.sh debug/waterBee_debug_1.0.60"
 echo -e "\n${GREEN}# SPECIFY PORT MANUALLY${NC}"
-echo -e "./flash_waterbee.sh release/waterBee_release_1.0.60 COM5"
+echo -e "PORT=/dev/ttyUSB0 ./flash_waterbee.sh     # Linux example"
+echo -e "PORT=/dev/tty.usbmodem* ./flash_waterbee.sh # macOS example"
 echo -e "\nFor more information, see firmware/README_FLASH.txt" 
