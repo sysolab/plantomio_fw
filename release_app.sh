@@ -139,7 +139,7 @@ find_latest_apk_version() {
   for apk in "${APK_FILES[@]}"; do
     filename=$(basename "$apk")
     
-    if [[ $filename =~ v$APP_VERSION || $filename =~ _$APP_VERSION_ || $filename =~ -$APP_VERSION- ]]; then
+    if [[ $filename =~ v$APP_VERSION || $filename =~ _${APP_VERSION}_ || $filename =~ -$APP_VERSION- ]]; then
       LATEST_APK_FILES+=("$apk")
     fi
   done
