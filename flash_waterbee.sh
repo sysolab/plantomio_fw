@@ -29,7 +29,7 @@ ERASE_FLASH=0   # Default to not erase flash
 OS_TYPE="unknown"
 if [[ "$(uname)" == "Darwin" ]]; then
   OS_TYPE="macos"
-  DEFAULT_PORT="/dev/tty.usbmodem2101"  # Default for macOS
+  DEFAULT_PORT="/dev/tty.usbmodem1101"  # Default for macOS
 elif [[ "$(uname)" == "Linux" || "$(uname)" == "linux-gnu"* ]]; then
   OS_TYPE="linux"
   DEFAULT_PORT="/dev/ttyACM0"  # Default for Linux

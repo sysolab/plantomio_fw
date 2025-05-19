@@ -9,9 +9,7 @@ This repository provides tools to flash firmware to WaterBee devices, download A
   - [Cloning the Repository](#cloning-the-repository)
   - [Setting Up](#setting-up)
 - [Firmware Installation](#firmware-installation)
-  - [Downloading Firmware](#downloading-firmware)
-  - [Flashing Instructions](#flashing-instructions)
-  - [Monitoring](#monitoring)
+  - [Flashing the WaterBee Device](#flashing-the-waterbee-device)
 - [Android Application](#android-application)
   - [Downloading the APK](#downloading-the-apk)
   - [Installation](#installation)
@@ -53,71 +51,119 @@ source ./setup.sh
 
 > **Note**: Using `source` is important as it activates the environment in your current shell.
 
+The setup script:
+- Creates a Python virtual environment (`.venv`)
+- Installs all required dependencies from `requirements.txt`
+- Makes the utility scripts executable
+- Tries to detect ESP-IDF installation (optional)
+- Works on both macOS and Linux systems
+
 ## Firmware Installation
 
-### Downloading Firmware
+### Flashing the WaterBee Device
 
-The firmware flash script will automatically download and extract the latest firmware from GitHub releases when needed. You don't need to download firmware files manually.
+The `flash_waterbee.sh` script provides an interactive and user-friendly way to flash your WaterBee device. It automatically downloads the latest firmware (or all versions if requested), detects available serial ports, and guides you through the flashing process step by step.
 
-### Flashing Instructions
+#### Recommended: Interactive Flashing
 
-The flashing script provides an interactive way to flash your WaterBee device:
+Simply run:
 
 ```bash
 ./flash_waterbee.sh
 ```
 
 This will:
-1. Automatically download the latest firmware release from GitHub if needed
-2. Ask if you want to flash a debug or release firmware
-3. Show available firmware versions
-4. Detect available serial ports
-5. Flash the selected firmware to the selected port
+1. Check for the latest firmware releases on GitHub and download them if needed
+2. Prompt you to choose between flashing a **release** (stable) or **debug** (development) firmware
+3. Show all available firmware versions and let you select which one to flash (default is the latest)
+4. Detect available serial ports and let you select the correct one (or use the default)
+5. Ask if you want to erase the flash before flashing
+6. Flash the selected firmware to your device
+7. Offer to start the serial monitor after flashing
 
-#### Alternative Flashing Methods
+#### Command Line Options and Advanced Usage
+
+You can also use command-line arguments for non-interactive or advanced workflows:
 
 ```bash
-# Flash latest *release* firmware
+# Flash the latest *release* firmware (auto-downloads if needed)
 ./flash_waterbee.sh release
 
-# Flash latest *debug* firmware
+# Flash the latest *debug* firmware
 ./flash_waterbee.sh debug
 
-# Flash a specific firmware and specify the port
-./flash_waterbee.sh firmware/release/waterBee_1.0.103_release_merged /dev/ttyUSB0
+# Download all available firmware versions (not just the latest)
+./flash_waterbee.sh --all
+
+# Download all versions and flash the latest release
+./flash_waterbee.sh --all release
+
+# Erase flash before flashing (no prompt)
+./flash_waterbee.sh --erase release
+
+# Specify a serial port explicitly
+PORT=/dev/ttyUSB0 ./flash_waterbee.sh release    # Linux example
+PORT=/dev/tty.usbmodem* ./flash_waterbee.sh      # macOS example
+
+# Flash a specific firmware folder
+./flash_waterbee.sh firmware/release/waterBee_1.1.9_release_merged
+
+# Flash a specific folder to a specific port
+./flash_waterbee.sh firmware/debug/waterBee_1.0.47 /dev/tty.usbserial‑0001
 ```
 
-### Monitoring
+#### Monitoring
 
 After flashing, you can monitor the device's serial output:
 
+- Directly from the script (it will offer to start monitoring)
+- Or manually:
+
 ```bash
-python -m esptool --chip esp32c6 -p <PORT> monitor
+python -m serial.tools.miniterm --raw <PORT> 115200
 ```
 
 Replace `<PORT>` with your device's port (the same one used for flashing).
+
+#### Notes
+- The script will automatically activate the Python virtual environment if needed.
+- If the required firmware is not found locally, it will be downloaded from GitHub.
+- The script works on both macOS and Linux, and will auto-detect serial ports for you.
+- You can always see all available options by running:
+
+```bash
+./flash_waterbee.sh --help
+```
 
 ## Android Application
 
 ### Downloading the APK
 
-Android APK files are available as GitHub releases. The easiest way to download them is using the provided script:
+Download the latest Android APK files using the provided script:
 
 ```bash
-# Make the script executable
-chmod +x get_android_app.sh
-
-# Run the script
+# Download only the latest version of the APKs
 ./get_android_app.sh
+
+# Download all versions (not just the latest)
+./get_android_app.sh --all
+
+# Show help
+./get_android_app.sh --help
 ```
 
 This script will:
 1. Automatically fetch the latest Android app release from GitHub
-2. Download all available APK variants
+2. By default, download only the most recent version APKs (both arm64 and armeabi)
 3. Create an `android_app` directory with the APK files
-4. Provide information about each APK variant and installation instructions
+4. Show which architecture each APK supports
 
-Alternatively, you can manually download APK files from the [GitHub releases page](https://github.com/sysolab/plantomio_fw/releases).
+The script is compatible with both macOS and Linux, and:
+- Supports downloading both ARM and ARM64 variants
+- Only downloads the latest version by default
+- Can download all versions with the `--all` flag
+- Skips universal and debug variants
+- Shows clear version information
 
 ### Installation
 
@@ -128,9 +174,33 @@ Alternatively, you can manually download APK files from the [GitHub releases pag
 Choose the appropriate APK variant for your device:
 - **arm64-v8a** - For modern Android devices (64-bit ARM)
 - **armeabi-v7a** - For older Android devices (32-bit ARM)
-- **universal** - Works on any Android device (larger file size)
-- **debug** - For development and testing (includes logging)
 
+## How to Use the App with Device
+
+1. **Go to the Device Tab**
+   - Open the app and navigate to the Device tab.
+   - The app will automatically scan for nearby BLE devices that advertise the correct manufacturer data (e.g., PLT-A7B3C9D1).
+   - Tap on your device in the list to connect. If you have previously saved a device, it will appear in 'My Devices' and auto-reconnect when in range.
+
+2. **Configure Device Settings**
+   - Once connected, tap the Settings tab (or the gear/settings icon) to access device configuration options.
+   - **WiFi Setup:** Enter your WiFi SSID and password to connect the device to your local network.
+   - **MQTT Setup:** Enter your MQTT broker configuration as a JSON string to enable cloud connectivity.
+   - **Calibration:** Calibrate sensors (pH, EC, TDS, ORP, Fill Level) as needed for accurate readings. Save calibration values to persist them.
+   - **Thresholds:** Set threshold values for each sensor (pH, EC, TDS, ORP, Fill Level, Temperature) to enable alerts and visual indicators.
+   - **Notifications:** You can set notification frequency or turn notifications off entirely in the Alerts/Notifications section. If set to 'Off', you will not receive push notifications for threshold events.
+
+3. **Managing Devices**
+   - **Disconnect:** Disconnect from a device to stop receiving live data, but keep it in 'My Devices'.
+   - **Forget:** Forget a device to remove it from 'My Devices'. It will appear in 'Available Devices' and can be reconnected at any time.
+   - The app will auto-reconnect to saved devices when they are in range or after unexpected disconnects.
+
+4. **Best Practices**
+   - Always calibrate sensors after installation or when readings seem inaccurate.
+   - Set appropriate thresholds for your use case to receive timely alerts.
+   - Use the notification settings to control alert frequency or disable them if not needed.
+
+For more details, see the in-app help or contact support.
 
 
 ## LED Status Codes
@@ -197,7 +267,6 @@ The LED controller uses the RMT (Remote Control) peripheral for precise timing c
 
 The LED components draw power from the 3.3V rail and use minimal current to preserve battery life.
 
-
 ## For Contributors
 
 ### Release Scripts
@@ -218,7 +287,7 @@ This script will:
 - Automatically detect firmware versions from directory names in the firmware folder
 - Create proper release notes with installation instructions
 - Package firmware into zip files for easy distribution
-- Create GitHub releases with the tag format: `firmware-v1.0.103`
+- Create GitHub releases with the tag format: `firmware-v1.1.9`
 
 #### Android App Release (`release_app.sh`)
 
@@ -235,7 +304,7 @@ This script will:
 - Extract version number from APK filenames
 - Create a combined ZIP file with all APK variants
 - Generate detailed release notes with information about each APK variant
-- Create GitHub releases with the tag format: `android-v1.6.0`
+- Create GitHub releases with the tag format: `android-v1.6.2`
 
 Both scripts support using either the GitHub CLI (if installed) or the GitHub API with a personal access token.
 
@@ -274,11 +343,18 @@ Both scripts support using either the GitHub CLI (if installed) or the GitHub AP
 - Try a lower baud rate by editing the `BAUD` value in the script
 - Make sure the device is in bootloader mode (hold BOOT button while resetting)
 
+### Serial Port is Busy
+
+If you see an error like "Could not open port: Resource temporarily unavailable":
+- Close any other applications that might be using the port (like Arduino IDE, serial monitor, screen)
+- Try unplugging and re-plugging the device
+- Restart your terminal
+
 ### Virtual Environment Issues
 
 - If you encounter issues with the virtual environment, try:
   ```bash
-  rm -rf .waterBeeFW
+  rm -rf .venv
   ./setup.sh
   ```
 
@@ -294,11 +370,13 @@ Both scripts support using either the GitHub CLI (if installed) or the GitHub AP
 
 - Uses esptool.py for ESP32 firmware flashing
 - Target chip: ESP32C6
-- Default baud rate: 460800
-- Flashing process includes both partition table and application binary
-- Release scripts support both GitHub CLI and API methods for releases
-- Scripts use GitHub API to fetch the latest releases automatically
-- Local directories (`firmware/` and `android_app/`) are used for staging files but not tracked in git
+- Default baud rate: 115200 bps
+- Merged bin file at address 0x0
+- Cross-platform scripts work on both macOS and Linux
+- Color terminal output for better readability
+- The APK downloader has special handling for different ARM architectures
+- Fallback methods for JSON parsing if jq is not available
+- Unified error handling and user feedback
 
 ## License
 
