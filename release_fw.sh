@@ -75,11 +75,12 @@ find_latest_firmware_version() {
     for dir in "$DEBUG_FIRMWARE_DIR"/*; do
       if [ -d "$dir" ]; then
         base_name=$(basename "$dir")
-        # Extract version from the directory name (format: waterBee_X.Y.Z_debug_merged)
-        if [[ $base_name =~ waterBee_([0-9]+\.[0-9]+\.[0-9]+)_debug_merged ]]; then
+        # Extract version from the directory name (format: waterBee_X.Y.Z_debug_merged or waterBee_X.Y.Z_debug_app)
+        if [[ $base_name =~ waterBee_([0-9]+\.[0-9]+\.[0-9]+)_debug_(merged|app) ]]; then
           version="${BASH_REMATCH[1]}"
+          variant="${BASH_REMATCH[2]}"
           all_debug_versions+=("$version")
-          echo -e "${GREEN}Found debug firmware: $base_name (v$version)${NC}"
+          echo -e "${GREEN}Found debug firmware: $base_name (v$version, $variant variant)${NC}"
         fi
       fi
     done
@@ -98,11 +99,12 @@ find_latest_firmware_version() {
     for dir in "$RELEASE_FIRMWARE_DIR"/*; do
       if [ -d "$dir" ]; then
         base_name=$(basename "$dir")
-        # Extract version from the directory name (format: waterBee_X.Y.Z_release_merged)
-        if [[ $base_name =~ waterBee_([0-9]+\.[0-9]+\.[0-9]+)_release_merged ]]; then
+        # Extract version from the directory name (format: waterBee_X.Y.Z_release_merged or waterBee_X.Y.Z_release_app)
+        if [[ $base_name =~ waterBee_([0-9]+\.[0-9]+\.[0-9]+)_release_(merged|app) ]]; then
           version="${BASH_REMATCH[1]}"
+          variant="${BASH_REMATCH[2]}"
           all_release_versions+=("$version")
-          echo -e "${GREEN}Found release firmware: $base_name (v$version)${NC}"
+          echo -e "${GREEN}Found release firmware: $base_name (v$version, $variant variant)${NC}"
         fi
       fi
     done
@@ -160,36 +162,49 @@ find_latest_firmware_version() {
   
   echo -e "${GREEN}Using latest firmware version: $FIRMWARE_VERSION${NC}"
   
-  # Set paths for the latest version only
-  DEBUG_DIR="$DEBUG_FIRMWARE_DIR/waterBee_${FIRMWARE_VERSION}_debug_merged"
-  RELEASE_DIR="$RELEASE_FIRMWARE_DIR/waterBee_${FIRMWARE_VERSION}_release_merged"
-  
-  # Verify that at least one of the directories exists
-  if [ ! -d "$DEBUG_DIR" ] && [ ! -d "$RELEASE_DIR" ]; then
-    echo -e "${RED}Error: Could not find firmware directories for version $FIRMWARE_VERSION${NC}"
-    exit 1
-  fi
+  # Set paths for the latest version - both merged and app variants
+  DEBUG_MERGED_DIR="$DEBUG_FIRMWARE_DIR/waterBee_${FIRMWARE_VERSION}_debug_merged"
+  DEBUG_APP_DIR="$DEBUG_FIRMWARE_DIR/waterBee_${FIRMWARE_VERSION}_debug_app"
+  RELEASE_MERGED_DIR="$RELEASE_FIRMWARE_DIR/waterBee_${FIRMWARE_VERSION}_release_merged"
+  RELEASE_APP_DIR="$RELEASE_FIRMWARE_DIR/waterBee_${FIRMWARE_VERSION}_release_app"
   
   # Check which variants are available for the latest version
-  HAS_DEBUG_VARIANT=false
-  HAS_RELEASE_VARIANT=false
+  HAS_DEBUG_MERGED=false
+  HAS_DEBUG_APP=false
+  HAS_RELEASE_MERGED=false
+  HAS_RELEASE_APP=false
   
-  if [ -d "$DEBUG_DIR" ]; then
-    HAS_DEBUG_VARIANT=true
-    echo -e "${GREEN}Debug variant for version $FIRMWARE_VERSION is available${NC}"
+  if [ -d "$DEBUG_MERGED_DIR" ]; then
+    HAS_DEBUG_MERGED=true
+    echo -e "${GREEN}Debug merged variant for version $FIRMWARE_VERSION is available${NC}"
   else
-    echo -e "${YELLOW}Debug variant for version $FIRMWARE_VERSION is not available${NC}"
+    echo -e "${YELLOW}Debug merged variant for version $FIRMWARE_VERSION is not available${NC}"
   fi
   
-  if [ -d "$RELEASE_DIR" ]; then
-    HAS_RELEASE_VARIANT=true
-    echo -e "${GREEN}Release variant for version $FIRMWARE_VERSION is available${NC}"
+  if [ -d "$DEBUG_APP_DIR" ]; then
+    HAS_DEBUG_APP=true
+    echo -e "${GREEN}Debug app variant for version $FIRMWARE_VERSION is available${NC}"
   else
-    echo -e "${YELLOW}Release variant for version $FIRMWARE_VERSION is not available${NC}"
+    echo -e "${YELLOW}Debug app variant for version $FIRMWARE_VERSION is not available${NC}"
+  fi
+  
+  if [ -d "$RELEASE_MERGED_DIR" ]; then
+    HAS_RELEASE_MERGED=true
+    echo -e "${GREEN}Release merged variant for version $FIRMWARE_VERSION is available${NC}"
+  else
+    echo -e "${YELLOW}Release merged variant for version $FIRMWARE_VERSION is not available${NC}"
+  fi
+  
+  if [ -d "$RELEASE_APP_DIR" ]; then
+    HAS_RELEASE_APP=true
+    echo -e "${GREEN}Release app variant for version $FIRMWARE_VERSION is available${NC}"
+  else
+    echo -e "${YELLOW}Release app variant for version $FIRMWARE_VERSION is not available${NC}"
   fi
   
   # Make sure at least one variant is available
-  if [ "$HAS_DEBUG_VARIANT" = false ] && [ "$HAS_RELEASE_VARIANT" = false ]; then
+  if [ "$HAS_DEBUG_MERGED" = false ] && [ "$HAS_DEBUG_APP" = false ] && 
+     [ "$HAS_RELEASE_MERGED" = false ] && [ "$HAS_RELEASE_APP" = false ]; then
     echo -e "${RED}Error: No firmware variants found for version $FIRMWARE_VERSION${NC}"
     exit 1
   fi
@@ -260,41 +275,74 @@ prepare_release_files() {
   echo "## Included Firmware Variants" >> "$RELEASE_NOTES"
   
   # Debug firmware
-  if [ "$HAS_DEBUG_VARIANT" = true ]; then
-    echo "- Debug firmware (v${FIRMWARE_VERSION})" >> "$RELEASE_NOTES"
+  if [ "$HAS_DEBUG_MERGED" = true ]; then
+    echo "- Debug merged firmware (v${FIRMWARE_VERSION})" >> "$RELEASE_NOTES"
     
     # Create debug firmware zip file
-    DEBUG_ZIP="$TEMP_DIR/firmware_v${FIRMWARE_VERSION}_debug.zip"
-    echo -e "${BLUE}Creating debug firmware archive...${NC}"
+    DEBUG_MERGED_ZIP="$TEMP_DIR/firmware_v${FIRMWARE_VERSION}_debug_merged.zip"
+    echo -e "${BLUE}Creating debug merged firmware archive...${NC}"
     
     # Create zip file
-    (cd "$DEBUG_DIR" && zip -r "$DEBUG_ZIP" ./)
+    (cd "$DEBUG_MERGED_DIR" && zip -r "$DEBUG_MERGED_ZIP" ./)
     
-    echo -e "${GREEN}Debug firmware archive created: $(basename "$DEBUG_ZIP")${NC}"
+    echo -e "${GREEN}Debug merged firmware archive created: $(basename "$DEBUG_MERGED_ZIP")${NC}"
+  fi
+  
+  if [ "$HAS_DEBUG_APP" = true ]; then
+    echo "- Debug app firmware (v${FIRMWARE_VERSION})" >> "$RELEASE_NOTES"
+    
+    # Create debug firmware zip file
+    DEBUG_APP_ZIP="$TEMP_DIR/firmware_v${FIRMWARE_VERSION}_debug_app.zip"
+    echo -e "${BLUE}Creating debug app firmware archive...${NC}"
+    
+    # Create zip file
+    (cd "$DEBUG_APP_DIR" && zip -r "$DEBUG_APP_ZIP" ./)
+    
+    echo -e "${GREEN}Debug app firmware archive created: $(basename "$DEBUG_APP_ZIP")${NC}"
   fi
   
   # Release firmware
-  if [ "$HAS_RELEASE_VARIANT" = true ]; then
-    echo "- Release firmware (v${FIRMWARE_VERSION})" >> "$RELEASE_NOTES"
+  if [ "$HAS_RELEASE_MERGED" = true ]; then
+    echo "- Release merged firmware (v${FIRMWARE_VERSION})" >> "$RELEASE_NOTES"
     
     # Create release firmware zip file
-    RELEASE_ZIP="$TEMP_DIR/firmware_v${FIRMWARE_VERSION}_release.zip"
-    echo -e "${BLUE}Creating release firmware archive...${NC}"
+    RELEASE_MERGED_ZIP="$TEMP_DIR/firmware_v${FIRMWARE_VERSION}_release_merged.zip"
+    echo -e "${BLUE}Creating release merged firmware archive...${NC}"
     
     # Create zip file
-    (cd "$RELEASE_DIR" && zip -r "$RELEASE_ZIP" ./)
+    (cd "$RELEASE_MERGED_DIR" && zip -r "$RELEASE_MERGED_ZIP" ./)
     
-    echo -e "${GREEN}Release firmware archive created: $(basename "$RELEASE_ZIP")${NC}"
+    echo -e "${GREEN}Release merged firmware archive created: $(basename "$RELEASE_MERGED_ZIP")${NC}"
+  fi
+  
+  if [ "$HAS_RELEASE_APP" = true ]; then
+    echo "- Release app firmware (v${FIRMWARE_VERSION})" >> "$RELEASE_NOTES"
+    
+    # Create release firmware zip file
+    RELEASE_APP_ZIP="$TEMP_DIR/firmware_v${FIRMWARE_VERSION}_release_app.zip"
+    echo -e "${BLUE}Creating release app firmware archive...${NC}"
+    
+    # Create zip file
+    (cd "$RELEASE_APP_DIR" && zip -r "$RELEASE_APP_ZIP" ./)
+    
+    echo -e "${GREEN}Release app firmware archive created: $(basename "$RELEASE_APP_ZIP")${NC}"
   fi
   
   # Complete release notes
   echo "" >> "$RELEASE_NOTES"
+  echo "## Firmware Variants" >> "$RELEASE_NOTES"
+  echo "- **Merged firmware**: Contains flash_args file - use for direct flashing" >> "$RELEASE_NOTES"
+  echo "- **App firmware**: Contains ota_info.txt - use for OTA updates" >> "$RELEASE_NOTES"
+  echo "" >> "$RELEASE_NOTES"
   echo "## Installation Instructions" >> "$RELEASE_NOTES"
-  echo "1. Download the appropriate firmware zip file for your needs" >> "$RELEASE_NOTES"
+  echo "1. Download the appropriate firmware zip file for your needs:" >> "$RELEASE_NOTES"
+  echo "   - For direct flashing: Use merged variant" >> "$RELEASE_NOTES"
+  echo "   - For OTA updates: Use app variant" >> "$RELEASE_NOTES"
   echo "2. Extract the zip file" >> "$RELEASE_NOTES"
   echo '3. Flash using the `flash_waterbee.sh` script:' >> "$RELEASE_NOTES"
-  echo '   - Debug build: `./flash_waterbee.sh debug`' >> "$RELEASE_NOTES"
-  echo '   - Release build: `./flash_waterbee.sh release`' >> "$RELEASE_NOTES"
+  echo '   - Debug merged: `./flash_waterbee.sh debug`' >> "$RELEASE_NOTES"
+  echo '   - Release merged: `./flash_waterbee.sh release`' >> "$RELEASE_NOTES"
+  echo '   - For app variants: Use the OTA update mechanism' >> "$RELEASE_NOTES"
   echo "" >> "$RELEASE_NOTES"
   echo "## Known Issues" >> "$RELEASE_NOTES"
   echo "- None" >> "$RELEASE_NOTES"
@@ -317,15 +365,25 @@ create_github_release() {
       --notes-file "$RELEASE_NOTES"
     
     # Upload debug firmware if available
-    if [ "$HAS_DEBUG_VARIANT" = true ] && [ -f "$DEBUG_ZIP" ]; then
-      echo -e "${BLUE}Uploading debug firmware...${NC}"
-      gh release upload "$RELEASE_TAG" "$DEBUG_ZIP" --repo "$GITHUB_REPO"
+    if [ "$HAS_DEBUG_MERGED" = true ] && [ -f "$DEBUG_MERGED_ZIP" ]; then
+      echo -e "${BLUE}Uploading debug merged firmware...${NC}"
+      gh release upload "$RELEASE_TAG" "$DEBUG_MERGED_ZIP" --repo "$GITHUB_REPO"
+    fi
+    
+    if [ "$HAS_DEBUG_APP" = true ] && [ -f "$DEBUG_APP_ZIP" ]; then
+      echo -e "${BLUE}Uploading debug app firmware...${NC}"
+      gh release upload "$RELEASE_TAG" "$DEBUG_APP_ZIP" --repo "$GITHUB_REPO"
     fi
     
     # Upload release firmware if available
-    if [ "$HAS_RELEASE_VARIANT" = true ] && [ -f "$RELEASE_ZIP" ]; then
-      echo -e "${BLUE}Uploading release firmware...${NC}"
-      gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --repo "$GITHUB_REPO"
+    if [ "$HAS_RELEASE_MERGED" = true ] && [ -f "$RELEASE_MERGED_ZIP" ]; then
+      echo -e "${BLUE}Uploading release merged firmware...${NC}"
+      gh release upload "$RELEASE_TAG" "$RELEASE_MERGED_ZIP" --repo "$GITHUB_REPO"
+    fi
+    
+    if [ "$HAS_RELEASE_APP" = true ] && [ -f "$RELEASE_APP_ZIP" ]; then
+      echo -e "${BLUE}Uploading release app firmware...${NC}"
+      gh release upload "$RELEASE_TAG" "$RELEASE_APP_ZIP" --repo "$GITHUB_REPO"
     fi
   else
     # Create release using GitHub API
@@ -356,23 +414,41 @@ create_github_release() {
     fi
     
     # Upload debug firmware if available
-    if [ "$HAS_DEBUG_VARIANT" = true ] && [ -f "$DEBUG_ZIP" ]; then
-      echo -e "${BLUE}Uploading debug firmware...${NC}"
+    if [ "$HAS_DEBUG_MERGED" = true ] && [ -f "$DEBUG_MERGED_ZIP" ]; then
+      echo -e "${BLUE}Uploading debug merged firmware...${NC}"
       curl -s -X POST \
         -H "Authorization: token $GITHUB_TOKEN" \
         -H "Content-Type: application/zip" \
-        --data-binary @"$DEBUG_ZIP" \
-        "${upload_url}?name=$(basename "$DEBUG_ZIP")"
+        --data-binary @"$DEBUG_MERGED_ZIP" \
+        "${upload_url}?name=$(basename "$DEBUG_MERGED_ZIP")"
+    fi
+    
+    if [ "$HAS_DEBUG_APP" = true ] && [ -f "$DEBUG_APP_ZIP" ]; then
+      echo -e "${BLUE}Uploading debug app firmware...${NC}"
+      curl -s -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: application/zip" \
+        --data-binary @"$DEBUG_APP_ZIP" \
+        "${upload_url}?name=$(basename "$DEBUG_APP_ZIP")"
     fi
     
     # Upload release firmware if available
-    if [ "$HAS_RELEASE_VARIANT" = true ] && [ -f "$RELEASE_ZIP" ]; then
-      echo -e "${BLUE}Uploading release firmware...${NC}"
+    if [ "$HAS_RELEASE_MERGED" = true ] && [ -f "$RELEASE_MERGED_ZIP" ]; then
+      echo -e "${BLUE}Uploading release merged firmware...${NC}"
       curl -s -X POST \
         -H "Authorization: token $GITHUB_TOKEN" \
         -H "Content-Type: application/zip" \
-        --data-binary @"$RELEASE_ZIP" \
-        "${upload_url}?name=$(basename "$RELEASE_ZIP")"
+        --data-binary @"$RELEASE_MERGED_ZIP" \
+        "${upload_url}?name=$(basename "$RELEASE_MERGED_ZIP")"
+    fi
+    
+    if [ "$HAS_RELEASE_APP" = true ] && [ -f "$RELEASE_APP_ZIP" ]; then
+      echo -e "${BLUE}Uploading release app firmware...${NC}"
+      curl -s -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: application/zip" \
+        --data-binary @"$RELEASE_APP_ZIP" \
+        "${upload_url}?name=$(basename "$RELEASE_APP_ZIP")"
     fi
   fi
   
