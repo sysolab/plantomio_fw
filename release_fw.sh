@@ -344,6 +344,11 @@ prepare_release_files() {
   echo '   - Release merged: `./flash_waterbee.sh release`' >> "$RELEASE_NOTES"
   echo '   - For app variants: Use the OTA update mechanism' >> "$RELEASE_NOTES"
   echo "" >> "$RELEASE_NOTES"
+  echo "## Included Documentation" >> "$RELEASE_NOTES"
+  echo "The following documentation files are included as separate downloads:" >> "$RELEASE_NOTES"
+  echo "- **ConfigGuide.md**: Complete MQTT configuration guide with examples" >> "$RELEASE_NOTES"
+  echo "- **LED_STATUS_GUIDE.md**: Comprehensive LED status indicator guide" >> "$RELEASE_NOTES"
+  echo "" >> "$RELEASE_NOTES"
   echo "## Known Issues" >> "$RELEASE_NOTES"
   echo "- None" >> "$RELEASE_NOTES"
   echo "" >> "$RELEASE_NOTES"
@@ -384,6 +389,16 @@ create_github_release() {
     if [ "$HAS_RELEASE_APP" = true ] && [ -f "$RELEASE_APP_ZIP" ]; then
       echo -e "${BLUE}Uploading release app firmware...${NC}"
       gh release upload "$RELEASE_TAG" "$RELEASE_APP_ZIP" --repo "$GITHUB_REPO"
+    fi
+    
+    # Upload guide files as individual assets
+    if [ -f "ConfigGuide.md" ]; then
+      echo -e "${BLUE}Uploading ConfigGuide.md...${NC}"
+      gh release upload "$RELEASE_TAG" "ConfigGuide.md" --repo "$GITHUB_REPO"
+    fi
+    if [ -f "LED_STATUS_GUIDE.md" ]; then
+      echo -e "${BLUE}Uploading LED_STATUS_GUIDE.md...${NC}"
+      gh release upload "$RELEASE_TAG" "LED_STATUS_GUIDE.md" --repo "$GITHUB_REPO"
     fi
   else
     # Create release using GitHub API
@@ -449,6 +464,24 @@ create_github_release() {
         -H "Content-Type: application/zip" \
         --data-binary @"$RELEASE_APP_ZIP" \
         "${upload_url}?name=$(basename "$RELEASE_APP_ZIP")"
+    fi
+    
+    # Upload guide files as individual assets
+    if [ -f "ConfigGuide.md" ]; then
+      echo -e "${BLUE}Uploading ConfigGuide.md...${NC}"
+      curl -s -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: text/markdown" \
+        --data-binary @"ConfigGuide.md" \
+        "${upload_url}?name=ConfigGuide.md"
+    fi
+    if [ -f "LED_STATUS_GUIDE.md" ]; then
+      echo -e "${BLUE}Uploading LED_STATUS_GUIDE.md...${NC}"
+      curl -s -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: text/markdown" \
+        --data-binary @"LED_STATUS_GUIDE.md" \
+        "${upload_url}?name=LED_STATUS_GUIDE.md"
     fi
   fi
   

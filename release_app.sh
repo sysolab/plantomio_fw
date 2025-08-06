@@ -253,6 +253,11 @@ prepare_release_artifacts() {
   echo "- Bluetooth Low Energy (BLE) support" >> "$RELEASE_NOTES"
   echo "- Location permissions for BLE scanning" >> "$RELEASE_NOTES"
   echo "" >> "$RELEASE_NOTES"
+  echo "## Included Documentation" >> "$RELEASE_NOTES"
+  echo "The following documentation files are included as separate downloads:" >> "$RELEASE_NOTES"
+  echo "- **ConfigGuide.md**: Complete MQTT configuration guide with examples" >> "$RELEASE_NOTES"
+  echo "- **LED_STATUS_GUIDE.md**: Comprehensive LED status indicator guide" >> "$RELEASE_NOTES"
+  echo "" >> "$RELEASE_NOTES"
   
   echo -e "${BLUE}Release artifacts prepared successfully.${NC}"
 }
@@ -278,6 +283,16 @@ create_github_release() {
         gh release upload "$RELEASE_TAG" "$apk" --repo "$GITHUB_REPO"
       fi
     done
+    
+    # Upload guide files as individual assets
+    if [ -f "ConfigGuide.md" ]; then
+      echo -e "${BLUE}Uploading ConfigGuide.md...${NC}"
+      gh release upload "$RELEASE_TAG" "ConfigGuide.md" --repo "$GITHUB_REPO"
+    fi
+    if [ -f "LED_STATUS_GUIDE.md" ]; then
+      echo -e "${BLUE}Uploading LED_STATUS_GUIDE.md...${NC}"
+      gh release upload "$RELEASE_TAG" "LED_STATUS_GUIDE.md" --repo "$GITHUB_REPO"
+    fi
   else
     # Create release using GitHub API
     echo -e "${BLUE}Creating release $RELEASE_TAG using GitHub API...${NC}"
@@ -318,6 +333,24 @@ create_github_release() {
           "${upload_url}?name=$filename"
       fi
     done
+    
+    # Upload guide files as individual assets
+    if [ -f "ConfigGuide.md" ]; then
+      echo -e "${BLUE}Uploading ConfigGuide.md...${NC}"
+      curl -s -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: text/markdown" \
+        --data-binary @"ConfigGuide.md" \
+        "${upload_url}?name=ConfigGuide.md"
+    fi
+    if [ -f "LED_STATUS_GUIDE.md" ]; then
+      echo -e "${BLUE}Uploading LED_STATUS_GUIDE.md...${NC}"
+      curl -s -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: text/markdown" \
+        --data-binary @"LED_STATUS_GUIDE.md" \
+        "${upload_url}?name=LED_STATUS_GUIDE.md"
+    fi
   fi
   
   echo -e "${GREEN}GitHub release created successfully!${NC}"
